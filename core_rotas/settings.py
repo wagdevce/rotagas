@@ -66,26 +66,25 @@ WSGI_APPLICATION = 'core_rotas.wsgi.application'
 # CONFIGURAÇÃO DE BASE DE DADOS (FORÇAR NUVEM EM PRODUÇÃO)
 # ==============================================================================
 
-# Tentamos obter a URL da base de dados da Railway
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-if DATABASE_URL:
-    # SE ESTIVERMOS NA NUVEM: Forçamos o uso do PostgreSQL
+# Se estamos na nuvem (DEBUG = False), EXIGIMOS o PostgreSQL da Railway
+if not DEBUG:
+    if not DATABASE_URL:
+        raise ValueError("ERRO GRAVE: DATABASE_URL não foi encontrada na Railway!")
+    
     DATABASES = {
-        'default': dj_database_url.config(
-            default=DATABASE_URL,
-            conn_max_age=600,
-            conn_health_checks=True,
-        )
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
     }
 else:
-    # SE ESTIVERMOS NO TEU PC: Usamos o SQLite local
+    # Se estamos no seu PC (DEBUG = True), usamos o ficheiro SQLite local
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+
 
 # --- FICHEIROS ESTÁTICOS ---
 STATIC_URL = '/static/'
