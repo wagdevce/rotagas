@@ -86,10 +86,11 @@ else:
     }
 
 
-# --- FICHEIROS ESTÁTICOS ---
+# --- FICHEIROS ESTÁTICOS (WhiteNoise) ---
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Usamos a versão SEM Manifest para evitar que quebre por ficheiros em falta
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # --- CONFIGURAÇÕES DE ACESSO ---
 LOGIN_REDIRECT_URL = 'home'
