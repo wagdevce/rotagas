@@ -1,0 +1,192 @@
+{% extends 'logistica/base.html' %}
+
+{% block content %}
+
+<!-- Cabeçalho Principal -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold text-uppercase mb-0" style="color: var(--sgb-black);">
+        <i class="fas fa-tags me-2"></i> Carteiras de Clientes
+    </h4>
+</div>
+
+<div class="row">
+    <!-- COLUNA 1: FORMULÁRIO DE CRIAÇÃO (Sticky para telas grandes) -->
+    <div class="col-lg-4 mb-4">
+        <div class="card border-0 shadow-sm sticky-top" style="top: 90px; z-index: 1;">
+            <div class="card-header bg-white border-0 pt-3">
+                <h6 class="fw-bold text-uppercase small text-muted mb-0">Nova Carteira</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="criar">
+                    
+                    <div class="mb-3">
+                        <label class="form-label small text-muted fw-bold">NOME DA CARTEIRA</label>
+                        <input type="text" name="nome" class="form-control" placeholder="Ex: Condomínios Zona Sul" required>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label small text-muted fw-bold">COR DA ETIQUETA</label>
+                        <div class="input-group">
+                            <input type="color" name="cor" class="form-control form-control-color border-end-0" value="#F26522" title="Escolha a cor">
+                            <span class="input-group-text bg-white border-start-0 text-muted small">Selecionar Cor</span>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100 shadow-sm text-uppercase fw-bold">
+                        <i class="fas fa-plus me-2"></i> Criar Carteira
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- COLUNA 2: LISTA DE CARTEIRAS -->
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom pt-3 pb-2 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold text-uppercase small text-muted mb-0">Carteiras Ativas</h6>
+                <span class="badge bg-light text-dark border">{{ carteiras.count }} Total</span>
+            </div>
+            
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for c in carteiras %}
+                    <li class="list-group-item p-3 border-bottom-0 border-top position-relative hover-bg-light">
+                        
+                        <!-- BOTÃO DE EXCLUSÃO (X) -->
+                        <!-- Posicionado absolutamente no canto superior esquerdo -->
+                        <button type="button" 
+                                class="btn btn-sm text-muted position-absolute top-0 start-0 m-1 btn-excluir"
+                                style="z-index: 10; opacity: 0.4;" 
+                                title="Excluir Carteira"
+                                data-bs-toggle="modal" 
+                                data-bs-target="#modalExcluir" 
+                                onclick="definirExclusao('{{ c.id }}', '{{ c.nome }}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+
+                        <div class="d-flex justify-content-between align-items-center ps-4"> 
+                            <!-- Padding left (ps-4) garante que o texto não sobreponha o botão X -->
+                            
+                            <div class="d-flex align-items-center">
+                                <!-- Badge de Cor Visual -->
+                                <span class="badge rounded-pill me-3 shadow-sm border" 
+                                      style="background-color: {{ c.cor_etiqueta }}; width: 18px; height: 18px; padding: 0; display: inline-block;">
+                                    &nbsp;
+                                </span>
+                                
+                                <div>
+                                    <!-- Link Principal (Nome da Carteira) -->
+                                    <a href="{% url 'detalhes_carteira' c.id %}" class="fw-bold text-dark text-decoration-none d-block stretched-link text-uppercase" style="letter-spacing: 0.5px;">
+                                        {{ c.nome }}
+                                    </a>
+                                    
+                                    <!-- Metadados (Responsável) -->
+                                    <div class="d-flex align-items-center mt-1">
+                                        {% if c.motoqueiro %}
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-10 rounded-pill small me-2">
+                                                <i class="fas fa-motorcycle me-1"></i> {{ c.motoqueiro.username }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-light text-muted border rounded-pill small me-2">
+                                                Sem Responsável
+                                            </span>
+                                        {% endif %}
+                                        <small class="text-muted" style="font-size: 0.7rem;">ID: {{ c.id }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Contador de Clientes -->
+                            <span class="badge bg-white text-secondary border shadow-sm px-3 py-2">
+                                {{ c.cliente_set.count }} <span class="fw-normal">Clientes</span>
+                            </span>
+                        </div>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-center text-muted py-5">
+                        <div class="opacity-50 mb-3">
+                            <i class="fas fa-folder-open fa-3x text-secondary"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">Nenhuma carteira criada</h6>
+                        <p class="small mb-0">Utilize o formulário ao lado para criar grupos de clientes.</p>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE CONFIRMAÇÃO DE EXCLUSÃO (Bootstrap 5) -->
+<div class="modal fade" id="modalExcluir" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            
+            <!-- Cabeçalho de Perigo -->
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-exclamation-triangle me-2"></i> Excluir Carteira
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            
+            <!-- Corpo do Aviso -->
+            <div class="modal-body p-4 text-center">
+                <p class="mb-2 text-muted">Você tem certeza que deseja remover permanentemente a carteira:</p>
+                <h3 class="fw-bold text-dark mb-3" id="nomeCarteiraModal">...</h3>
+                
+                <div class="alert alert-warning border-0 bg-warning bg-opacity-10 d-flex align-items-start text-start">
+                    <i class="fas fa-info-circle text-warning mt-1 me-2"></i>
+                    <small class="text-dark">
+                        <strong>Atenção:</strong> Os clientes vinculados a esta carteira <u>não serão apagados</u>. Eles ficarão "Sem Carteira" e poderão ser reorganizados depois.
+                    </small>
+                </div>
+            </div>
+            
+            <!-- Rodapé de Ação -->
+            <div class="modal-footer border-0 bg-light justify-content-center">
+                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="excluir_carteira">
+                    <input type="hidden" name="id_carteira" id="idCarteiraInput">
+                    <button type="submit" class="btn btn-danger px-4 fw-bold shadow-sm">
+                        <i class="fas fa-trash-alt me-2"></i> Sim, Excluir
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Efeito Hover na linha da lista */
+    .hover-bg-light:hover { 
+        background-color: #f8f9fa; 
+    }
+    
+    /* Botão de excluir fica vermelho ao passar o mouse */
+    .btn-excluir:hover {
+        color: #dc3545 !important; /* Vermelho Bootstrap */
+        opacity: 1 !important;
+        transform: scale(1.1);
+        transition: all 0.2s;
+    }
+</style>
+
+<!-- SCRIPT LÓGICO PARA O MODAL -->
+<script>
+    function definirExclusao(id, nome) {
+        // Injeta os dados da carteira clicada dentro do Modal antes dele abrir
+        document.getElementById('idCarteiraInput').value = id;
+        document.getElementById('nomeCarteiraModal').innerText = nome;
+    }
+</script>
+
+{% endblock %}

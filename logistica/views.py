@@ -1,0 +1,387 @@
+import datetime
+import csv
+import io
+from decimal import Decimal, InvalidOperation
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.db.models import Sum, Count, Q
+from django.utils import timezone
+from django.db import transaction
+from django.contrib import messages
+
+# Importações dos Models locais
+from .models import Visita, Cliente, Rota, Carteira, Ligacao
+
+# --- CONSTANTES DE STATUS ---
+STATUS_PENDENTE = 'PENDENTE'
+STATUS_REALIZADA = 'REALIZADA'
+STATUS_NAO_VENDA = 'NAO_VENDA'
+
+# --- UTILITÁRIOS ---
+def converter_valor(valor_str):
+    """Converte strings monetárias (ex: 150,00) para Decimal de forma segura."""
+    if not valor_str: return Decimal('0.00')
+    try:
+        return Decimal(valor_str.replace('.', '').replace(',', '.'))
+    except (InvalidOperation, ValueError):
+        return Decimal('0.00')
+
+# ==============================================================================
+# MÓDULO DE ACESSO E TRÁFEGO
+# ==============================================================================
+
+@login_required
+def home(request):
+    """Controlador de Tráfego: Redireciona o utilizador conforme o seu perfil."""
+    if request.user.is_staff: 
+        return redirect('dashboard')
+    
+    if request.user.groups.filter(name='Agentes Comerciais').exists() or Carteira.objects.filter(agente_comercial=request.user).exists():
+        return redirect('dash_comercial')
+
+    visitas_pendentes = Visita.objects.select_related('cliente').filter(
+        rota__motoqueiro=request.user,
+        status=STATUS_PENDENTE
+    ).order_by('cliente__bairro', 'cliente__nome')
+    
+    return render(request, 'logistica/dash_motoqueiro.html', {'visitas': visitas_pendentes})
+
+# ==============================================================================
+# MÓDULO OPERACIONAL (MOTOQUEIRO)
+# ==============================================================================
+
+@login_required
+@transaction.atomic
+def registrar_visita(request, id_visita):
+    visita = get_object_or_404(Visita.objects.select_related('cliente', 'rota'), pk=id_visita)
+    
+    if visita.rota.motoqueiro != request.user: 
+        return redirect('home')
+
+    if request.method == 'POST':
+        resultado_venda = request.POST.get('resultado_venda')
+        
+        if resultado_venda == 'SIM':
+            valor = converter_valor(request.POST.get('valor_recebido'))
+            visita.status = STATUS_REALIZADA
+            visita.valor_recebido = valor
+            visita.cliente.divida_atual -= valor
+            visita.cliente.save()
+            messages.success(request, f"Venda de R$ {valor} registada para {visita.cliente.nome}.")
+        else:
+            visita.status = STATUS_NAO_VENDA
+            visita.motivo_nao_venda = request.POST.get('motivo_nao_venda')
+            visita.concorrente_empresa = request.POST.get('concorrente_empresa')
+            visita.concorrente_preco = converter_valor(request.POST.get('concorrente_preco'))
+            visita.observacao = request.POST.get('observacao')
+            messages.info(request, "Visita finalizada sem venda.")
+
+        visita.save()
+        return redirect('home')
+
+    return render(request, 'logistica/registrar_visita.html', {'visita': visita})
+
+# ==============================================================================
+# MÓDULO COMERCIAL (ESTAGIÁRIO / CALL CENTER)
+# ==============================================================================
+
+@login_required
+def dash_comercial(request):
+    """Cockpit de Alta Produtividade para o Agente Comercial."""
+    carteiras = Carteira.objects.filter(agente_comercial=request.user)
+    
+    hoje = timezone.now().date()
+    
+    # 1. Pega os IDs de todos os clientes que o estagiário JÁ LIGOU hoje
+    clientes_ja_ligados = Ligacao.objects.filter(
+        agente=request.user, 
+        data_ligacao__date=hoje
+    ).values_list('cliente_id', flat=True)
+
+    # 2. Busca os clientes da carteira, mas EXCLUI os que já foram ligados
+    clientes = Cliente.objects.filter(
+        carteiras__in=carteiras
+    ).exclude(
+        id__in=clientes_ja_ligados
+    ).distinct().order_by('-divida_atual')
+
+    ligacoes_hoje = Ligacao.objects.filter(agente=request.user, data_ligacao__date=hoje)
+    
+    # AQUI ESTAVA O ERRO DE SINTAXE DO CÓDIGO ANTERIOR:
+    metricas = {
+        'total_feitas': ligacoes_hoje.count(),
+        'vendas_fechadas': ligacoes_hoje.filter(resultado='VENDA_FECHADA').count(),
+        'recusas': ligacoes_hoje.filter(resultado='RECUSA').count(),
+        'meta_diaria': 400
+    }
+
+    return render(request, 'logistica/dash_comercial.html', {
+        'clientes': clientes,
+        'metricas': metricas
+    })
+
+@login_required
+@transaction.atomic
+def registrar_ligacao(request, cliente_id):
+    if request.method == 'POST':
+        cliente = get_object_or_404(Cliente, pk=cliente_id)
+        resultado = request.POST.get('resultado')
+        obs = request.POST.get('observacao', '')
+
+        Ligacao.objects.create(agente=request.user, cliente=cliente, resultado=resultado, observacao=obs)
+
+        if resultado == 'VENDA_FECHADA':
+            carteira = cliente.carteiras.first()
+            motoqueiro = carteira.motoqueiro if carteira else None
+            
+            if motoqueiro:
+                hoje = timezone.now().date()
+                rota, _ = Rota.objects.get_or_create(
+                    motoqueiro=motoqueiro, 
+                    data_criacao__date=hoje,
+                    defaults={'nome': f"Rota Comercial {hoje.strftime('%d/%m')}"}
+                )
+                Visita.objects.create(
+                    rota=rota, 
+                    cliente=cliente, 
+                    status=STATUS_PENDENTE,
+                    observacao=f"Venda Telemarketing (Por: {request.user.username})"
+                )
+                messages.success(request, f"Venda fechada! {motoqueiro.username} já recebeu a entrega no telemóvel.")
+            else:
+                messages.warning(request, "Venda registada, mas este cliente não tem um motoqueiro fixo.")
+        else:
+            messages.info(request, f"Contacto registado: {resultado}")
+
+    return redirect('dash_comercial')
+
+# ==============================================================================
+# MÓDULO GERENCIAL (AUDITORIA E PLANEAMENTO)
+# ==============================================================================
+
+@login_required
+def dashboard(request):
+    if not request.user.is_staff: return redirect('home')
+    
+    data_url = request.GET.get('data')
+    try:
+        data_filtro = datetime.datetime.strptime(data_url, '%Y-%m-%d').date() if data_url else timezone.now().date()
+    except ValueError:
+        data_filtro = timezone.now().date()
+
+    visitas_hoje = Visita.objects.filter(rota__data_criacao__date=data_filtro)
+    
+    resumo = visitas_hoje.aggregate(
+        total_recebido=Sum('valor_recebido'),
+        pendentes=Count('id', filter=Q(status=STATUS_PENDENTE)),
+        vendas=Count('id', filter=Q(status=STATUS_REALIZADA)),
+        concorrencia=Count('id', filter=Q(motivo_nao_venda='CONCORRENCIA')),
+        estoque=Count('id', filter=Q(motivo_nao_venda='NAO_PRECISA'))
+    )
+
+    historico = visitas_hoje.select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
+    qtd_ligacoes = Ligacao.objects.filter(data_ligacao__date=data_filtro).count()
+
+    return render(request, 'logistica/dashboard.html', {
+        'total_dinheiro': resumo['total_recebido'] or 0,
+        'pendentes': resumo['pendentes'],
+        'realizadas': (resumo['vendas'] or 0) + (resumo['concorrencia'] or 0) + (resumo['estoque'] or 0),
+        'qtd_vendas': resumo['vendas'],
+        'qtd_perdas': (resumo['concorrencia'] or 0) + (resumo['estoque'] or 0),
+        'motivo_concorrencia': resumo['concorrencia'],
+        'motivo_estoque': resumo['estoque'],
+        'qtd_ligacoes': qtd_ligacoes,
+        'historico': historico,
+        'data_atual': data_filtro,
+    })
+
+@login_required
+def relatorio_auditoria(request):
+    if not request.user.is_staff: return redirect('home')
+    
+    data_str = request.GET.get('data')
+    try:
+        data_obj = datetime.datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else timezone.now().date()
+    except ValueError:
+        data_obj = timezone.now().date()
+    
+    ligacoes = Ligacao.objects.filter(data_ligacao__date=data_obj).select_related('agente', 'cliente').order_by('agente', 'data_ligacao')
+    
+    ranking = Ligacao.objects.filter(data_ligacao__date=data_obj).values('agente__username').annotate(
+        total=Count('id'),
+        vendas=Count('id', filter=Q(resultado='VENDA_FECHADA'))
+    ).order_by('-total')
+
+    visitas_rua = Visita.objects.filter(data_visita__date=data_obj, status__in=[STATUS_REALIZADA, STATUS_NAO_VENDA]).select_related('cliente', 'rota__motoqueiro').order_by('data_visita')
+
+    return render(request, 'logistica/relatorio_auditoria.html', {
+        'data_selecionada': data_obj,
+        'ligacoes': ligacoes,
+        'ranking_comercial': ranking,
+        'visitas_rua': visitas_rua
+    })
+
+@login_required
+def distribuir_rotas(request):
+    if not request.user.is_staff: return redirect('home')
+    
+    bairro = request.GET.get('bairro')
+    carteira_id = request.GET.get('carteira')
+    status_filter = request.GET.get('status')
+    
+    clientes = Cliente.objects.all().order_by('bairro', 'nome')
+    if bairro: clientes = clientes.filter(bairro=bairro)
+    if carteira_id: clientes = clientes.filter(carteiras__id=carteira_id)
+    
+    if status_filter == 'VIRADOS': clientes = [c for c in clientes if c.is_virado]
+    elif status_filter == 'ATRASADOS': clientes = [c for c in clientes if c.is_atrasado]
+
+    if request.method == 'POST':
+        motoqueiro = get_object_or_404(User, id=request.POST.get('motoqueiro_id'))
+        c_ids = request.POST.getlist('clientes_ids')
+        if c_ids:
+            rota = Rota.objects.create(nome=f"Rota {timezone.now().strftime('%d/%m')}", motoqueiro=motoqueiro)
+            Visita.objects.bulk_create([Visita(rota=rota, cliente_id=cid) for cid in c_ids])
+            messages.success(request, f"Rota criada com sucesso para {motoqueiro.username}.")
+            return redirect('dashboard')
+
+    context = {
+        'clientes': clientes,
+        'bairros': Cliente.objects.values_list('bairro', flat=True).distinct().order_by('bairro'),
+        'carteiras': Carteira.objects.all(),
+        'motoqueiros': User.objects.filter(is_staff=False),
+        'filtro_bairro': bairro, 
+        'filtro_carteira': int(carteira_id) if carteira_id else None, 
+        'filtro_status': status_filter
+    }
+    return render(request, 'logistica/distribuir_rotas.html', context)
+
+@login_required
+def gerenciar_carteiras(request):
+    if not request.user.is_staff: return redirect('home')
+    if request.method == 'POST':
+        acao = request.POST.get('acao')
+        if acao == 'criar':
+            Carteira.objects.create(nome=request.POST.get('nome'), cor_etiqueta=request.POST.get('cor'))
+        elif acao == 'excluir_carteira':
+            Carteira.objects.filter(id=request.POST.get('id_carteira')).delete()
+        return redirect('gerenciar_carteiras')
+    return render(request, 'logistica/carteiras.html', {'carteiras': Carteira.objects.all().order_by('nome')})
+
+# ==============================================================================
+# MOTOR DE IMPORTAÇÃO ROBUSTO (PLANILHAS)
+# ==============================================================================
+
+@login_required
+@transaction.atomic
+def detalhes_carteira(request, id_carteira):
+    if not request.user.is_staff: return redirect('home')
+    carteira = get_object_or_404(Carteira, pk=id_carteira)
+    
+    if request.method == 'POST':
+        acao = request.POST.get('acao')
+        
+        if acao == 'definir_motoqueiro':
+            carteira.motoqueiro_id = request.POST.get('motoqueiro_id')
+            carteira.save()
+            messages.success(request, f"Motoqueiro atualizado para: {carteira.motoqueiro.username}")
+            
+        elif acao == 'remover_motoqueiro':
+            carteira.motoqueiro = None
+            carteira.save()
+            messages.info(request, "Motoqueiro removido da carteira.")
+            
+        elif acao == 'definir_agente':
+            carteira.agente_comercial_id = request.POST.get('agente_id')
+            carteira.save()
+            messages.success(request, f"Agente Comercial atualizado para: {carteira.agente_comercial.username}")
+            
+        elif acao == 'remover_agente':
+            carteira.agente_comercial = None
+            carteira.save()
+            messages.info(request, "Agente Comercial removido. A lista de prospecção ficará vazia.")
+            
+        elif acao == 'remover_cliente':
+            carteira.clientes.remove(request.POST.get('remover_id'))
+            
+        elif acao == 'adicionar_clientes':
+            ids = request.POST.getlist('clientes_ids')
+            if ids:
+                carteira.clientes.add(*ids)
+                messages.success(request, f"{len(ids)} clientes adicionados à carteira.")
+        
+        elif acao == 'importar_csv':
+            arquivo = request.FILES.get('arquivo_csv')
+            if arquivo:
+                try:
+                    decoded = arquivo.read().decode('utf-8', errors='replace')
+                    io_string = io.StringIO(decoded)
+                    
+                    primeira_linha = io_string.readline()
+                    delimiter = ';' if ';' in primeira_linha else ','
+                    io_string.seek(0)
+                    
+                    reader = csv.reader(io_string, delimiter=delimiter)
+                    
+                    header, col_map, contagem = [], {}, 0
+                    
+                    for row in reader:
+                        row_clean = [str(c).strip() for c in row if c]
+                        if not row_clean: continue
+                        
+                        if not header:
+                            row_lower = [c.lower() for c in row_clean]
+                            if any(x in row_lower for x in ['nome', 'endere', 'telefone', 'bairro']):
+                                header = row_lower
+                                for i, col in enumerate(header):
+                                    if 'nome resp' in col: col_map['nome'] = i
+                                    elif 'nome' in col and 'nome' not in col_map: col_map['nome'] = i
+                                    elif 'endere' in col: col_map['endereco'] = i
+                                    elif 'número' in col or 'numero' in col: col_map['numero'] = i
+                                    elif 'bairro' in col: col_map['bairro'] = i
+                                    elif 'telefone' in col: col_map['telefone'] = i
+                            continue
+
+                        if header and col_map:
+                            try:
+                                raw_nome = row_clean[col_map['nome']]
+                                if not raw_nome or raw_nome == '--' or raw_nome.replace('.', '').replace('-', '').isdigit():
+                                    continue
+                                
+                                end = row_clean[col_map.get('endereco', 0)] if 'endereco' in col_map and len(row_clean) > col_map['endereco'] else ""
+                                num = row_clean[col_map.get('numero', 0)] if 'numero' in col_map and len(row_clean) > col_map['numero'] else ""
+                                bairro = row_clean[col_map.get('bairro', 0)] if 'bairro' in col_map and len(row_clean) > col_map['bairro'] else "Bairro não informado"
+                                tel = row_clean[col_map.get('telefone', 0)] if 'telefone' in col_map and len(row_clean) > col_map['telefone'] else ""
+                                
+                                bairro = bairro if bairro != '--' else "Bairro não informado"
+                                tel_limpo = tel.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+                                if tel_limpo == '--': tel_limpo = ""
+                                
+                                cli_obj, created = Cliente.objects.get_or_create(
+                                    nome=raw_nome[:100],
+                                    defaults={
+                                        'endereco': f"{end}, {num}".strip(' ,-'),
+                                        'bairro': bairro[:50],
+                                        'telefone': tel_limpo[:20]
+                                    }
+                                )
+                                cli_obj.carteiras.add(carteira)
+                                contagem += 1
+                            except Exception:
+                                continue
+                                
+                    messages.success(request, f"Sucesso! {contagem} clientes foram incorporados.")
+                except Exception as e:
+                    messages.error(request, f"Erro crítico na leitura: {str(e)}")
+                    
+        return redirect('detalhes_carteira', id_carteira=id_carteira)
+
+    context = {
+        'carteira': carteira, 
+        'clientes': carteira.clientes.all().order_by('bairro', 'nome'),
+        'usuarios': User.objects.filter(is_active=True).order_by('username'),
+        'clientes_livres': Cliente.objects.filter(carteiras__isnull=True).order_by('bairro', 'nome')
+    }
+    return render(request, 'logistica/detalhes_carteira.html', context)

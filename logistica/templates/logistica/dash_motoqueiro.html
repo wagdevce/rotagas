@@ -1,0 +1,219 @@
+{% extends 'logistica/base.html' %}
+
+{% block content %}
+
+<!-- ESTILOS ESPECÍFICOS PARA MOBILE / ENTREGADOR -->
+<style>
+    /* Ajustes para leitura sob luz do sol e usabilidade com uma mão */
+    body {
+        background-color: #f4f6f9; /* Fundo ligeiramente mais cinzento para destacar os cartões brancos */
+    }
+    
+    .delivery-card {
+        background: #ffffff;
+        border-radius: 20px;
+        border: none;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+        margin-bottom: 20px;
+        overflow: hidden;
+        transition: transform 0.2s;
+    }
+
+    .delivery-card:active {
+        transform: scale(0.98); /* Feedback tátil visual ao tocar */
+    }
+
+    .card-header-orange {
+        background: linear-gradient(90deg, var(--sgb-orange) 0%, #ff8547 100%);
+        height: 6px;
+        width: 100%;
+    }
+
+    /* Tipografia de Alto Contraste */
+    .client-name {
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: var(--sgb-black);
+        letter-spacing: -0.5px;
+        line-height: 1.2;
+    }
+
+    .client-address {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: #495057;
+    }
+
+    /* Bloco Financeiro */
+    .finance-block {
+        background-color: #fff5f0; /* Fundo laranja muito claro */
+        border: 1px dashed #fdbf9c;
+        border-radius: 12px;
+    }
+
+    .finance-value {
+        font-size: 1.8rem;
+        font-weight: 900;
+        color: #d1541b;
+        letter-spacing: -1px;
+    }
+
+    /* Botões "Fat-Finger" (Grandes para o polegar) */
+    .btn-action-primary {
+        background-color: var(--sgb-orange);
+        color: white;
+        border-radius: 14px;
+        font-weight: 800;
+        font-size: 1.1rem;
+        padding: 16px 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 4px 12px rgba(242, 101, 34, 0.3);
+        border: none;
+    }
+
+    .btn-action-primary:hover, .btn-action-primary:active {
+        background-color: #d1541b;
+        color: white;
+    }
+
+    .btn-quick {
+        background-color: #f8f9fa;
+        color: var(--sgb-black);
+        border: 1px solid #e9ecef;
+        border-radius: 14px;
+        font-weight: 700;
+        padding: 12px 5px;
+        font-size: 0.85rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .btn-quick i { font-size: 1.2rem; }
+    .btn-quick.nav-btn { color: #0d6efd; background-color: #f0f7ff; border-color: #cfe2ff; }
+    .btn-quick.zap-btn { color: #198754; background-color: #f0fdf4; border-color: #d1e7dd; }
+
+    /* Fix para ocultar a navbar padrão se for um PWA instalado no celular */
+    @media (display-mode: standalone) {
+        body { padding-top: 20px !important; }
+        .navbar { display: none !important; }
+    }
+</style>
+
+<!-- ==========================================
+     CABEÇALHO DA ROTA
+=========================================== -->
+<div class="mb-4 pt-2">
+    <div class="d-flex justify-content-between align-items-end">
+        <div>
+            <p class="mb-0 text-muted fw-bold text-uppercase small" style="letter-spacing: 1px;">Bem-vindo,</p>
+            <h2 class="fw-bold text-dark mb-0">{{ request.user.username }}</h2>
+        </div>
+        <div class="text-end">
+            <div class="bg-dark text-white rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 50px; height: 50px;">
+                <span class="fs-4 fw-bold">{{ visitas.count }}</span>
+            </div>
+            <small class="text-muted fw-bold" style="font-size: 0.7rem;">PENDENTES</small>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     LISTA DE ENTREGAS (CARTÕES)
+=========================================== -->
+<div class="pb-5">
+    {% for visita in visitas %}
+    <div class="delivery-card">
+        <!-- Fita Superior Laranja -->
+        <div class="card-header-orange"></div>
+        
+        <div class="p-4">
+            <!-- Cabeçalho do Cartão: ID + Status -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-light text-secondary border font-monospace">
+                    <i class="fas fa-hashtag me-1"></i>{{ visita.cliente.id }}
+                </span>
+                <span class="badge bg-warning text-dark border border-warning shadow-sm">
+                    <i class="fas fa-motorcycle me-1"></i> A CAMINHO
+                </span>
+            </div>
+
+            <!-- Dados do Cliente -->
+            <h3 class="client-name mb-2">{{ visita.cliente.nome }}</h3>
+            
+            <div class="d-flex align-items-start mb-3">
+                <i class="fas fa-map-marker-alt text-danger mt-1 me-2" style="font-size: 1.1rem;"></i>
+                <span class="client-address">{{ visita.cliente.endereco }} <br> <span class="fw-bold text-dark">{{ visita.cliente.bairro }}</span></span>
+            </div>
+
+            <!-- Informação Financeira (Alta Prioridade) -->
+            <div class="finance-block p-3 d-flex justify-content-between align-items-center mb-4 shadow-sm">
+                <div class="text-uppercase text-danger fw-bold" style="font-size: 0.75rem; letter-spacing: 1px;">
+                    <i class="fas fa-hand-holding-usd me-1"></i> Cobrar Cliente
+                </div>
+                <div class="finance-value">
+                    <span style="font-size: 1rem; position: relative; top: -5px;">R$</span> {{ visita.cliente.divida_atual }}
+                </div>
+            </div>
+
+            <!-- Ações Secundárias (Navegação e Contacto) -->
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <!-- Abre o Google Maps com o endereço do cliente -->
+                    <a href="https://www.google.com/maps/search/?api=1&query={{ visita.cliente.endereco|urlencode }}, {{ visita.cliente.bairro|urlencode }}" 
+                       target="_blank" class="btn btn-quick nav-btn w-100 text-decoration-none">
+                        <i class="fas fa-location-arrow"></i>
+                        GPS (Rotas)
+                    </a>
+                </div>
+                <div class="col-6">
+                    <!-- Abre o WhatsApp -->
+                    {% if visita.cliente.telefone %}
+                    <a href="https://wa.me/55{{ visita.cliente.telefone }}?text=Olá%20{{ visita.cliente.nome|urlencode }},%20o%20entregador%20da%20Rotagas%20está%20a%20caminho!" 
+                       target="_blank" class="btn btn-quick zap-btn w-100 text-decoration-none">
+                        <i class="fab fa-whatsapp"></i>
+                        Avisar Zap
+                    </a>
+                    {% else %}
+                    <button class="btn btn-quick w-100 opacity-50" disabled>
+                        <i class="fas fa-phone-slash"></i>
+                        Sem Número
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Ação Principal ("Deslizar/Clicar para Finalizar") -->
+            <div class="d-grid mt-2">
+                <a href="{% url 'registrar_visita' visita.id %}" class="btn btn-action-primary text-decoration-none d-flex justify-content-center align-items-center">
+                    <span class="me-auto ms-3"><i class="fas fa-check-circle fa-lg"></i></span>
+                    <span class="pe-4">Cheguei no Local</span>
+                </a>
+            </div>
+            
+        </div>
+    </div>
+    {% empty %}
+    
+    <!-- ESTADO VAZIO: ROTA CONCLUÍDA COM SUCESSO -->
+    <div class="text-center mt-5 pt-4">
+        <div class="position-relative d-inline-block mb-4">
+            <i class="fas fa-shield-alt text-light" style="font-size: 120px;"></i>
+            <i class="fas fa-check position-absolute top-50 start-50 translate-middle text-success" style="font-size: 50px;"></i>
+        </div>
+        <h2 class="fw-bold text-dark mb-2" style="letter-spacing: -1px;">Rota Finalizada!</h2>
+        <p class="text-muted fs-5 px-3">Parabéns, {{ request.user.username }}! Entregou todas as encomendas do dia.</p>
+        
+        <div class="mt-5">
+            <a href="{% url 'home' %}" class="btn btn-dark btn-lg rounded-pill px-5 fw-bold shadow-sm">
+                <i class="fas fa-sync-alt me-2"></i> Atualizar Fila
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}

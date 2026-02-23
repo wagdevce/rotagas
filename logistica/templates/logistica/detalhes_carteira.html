@@ -1,0 +1,255 @@
+{% extends 'logistica/base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{% url 'gerenciar_carteiras' %}" class="text-decoration-none text-muted small fw-bold text-uppercase hover-scale d-inline-block">
+            <i class="fas fa-arrow-left me-1"></i> Voltar
+        </a>
+        <div class="d-flex align-items-center mt-2">
+            <span class="badge rounded-circle me-3 shadow-sm border" style="background-color: {{ carteira.cor_etiqueta }}; width: 26px; height: 26px; padding: 0;">&nbsp;</span>
+            <h3 class="fw-bold mb-0 text-dark">{{ carteira.nome }}</h3>
+        </div>
+    </div>
+    <button type="button" class="btn btn-outline-dark shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalImportarCSV">
+        <i class="fas fa-file-csv me-2" style="color: var(--sgb-orange);"></i> Importar Planilha
+    </button>
+</div>
+
+<!-- BLOCO DE ATRIBUIÇÃO DUPLA -->
+<div class="row g-4 mb-4">
+    <!-- COLUNA: RESPONSÁVEL DE RUA (MOTOQUEIRO) -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4">
+                <h6 class="fw-bold text-uppercase text-muted mb-3" style="font-size: 0.75rem; letter-spacing: 1px;">
+                    <i class="fas fa-motorcycle me-1"></i> Logística (Rua)
+                </h6>
+                <div class="d-flex align-items-center mb-3">
+                    <div class="bg-light rounded p-3 me-3 text-center" style="width: 50px;">
+                        <i class="fas fa-user-tag text-dark"></i>
+                    </div>
+                    <div>
+                        {% if carteira.motoqueiro %}
+                            <h5 class="fw-bold mb-0 text-dark">{{ carteira.motoqueiro.username }}</h5>
+                            <form method="post" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="acao" value="remover_motoqueiro">
+                                <button type="submit" class="btn btn-link p-0 text-danger text-decoration-none small fw-bold">Remover</button>
+                            </form>
+                        {% else %}
+                            <h5 class="fw-bold mb-0 text-muted fst-italic">Sem Motoqueiro</h5>
+                        {% endif %}
+                    </div>
+                </div>
+                <form method="post" class="d-flex gap-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="definir_motoqueiro">
+                    <select name="motoqueiro_id" class="form-select form-select-sm shadow-sm" required>
+                        <option value="" selected disabled>Atribuir Motoqueiro...</option>
+                        {% for u in usuarios %}
+                        <option value="{{ u.id }}">{{ u.username }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-dark px-3">Definir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- COLUNA: RESPONSÁVEL COMERCIAL (ESTAGIÁRIO) -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid var(--sgb-orange) !important;">
+            <div class="card-body p-4">
+                <h6 class="fw-bold text-uppercase text-muted mb-3" style="font-size: 0.75rem; letter-spacing: 1px;">
+                    <i class="fas fa-headset me-1 text-orange"></i> Comercial (Escritório)
+                </h6>
+                <div class="d-flex align-items-center mb-3">
+                    <div class="bg-orange-subtle rounded p-3 me-3 text-center" style="width: 50px; background-color: rgba(242, 101, 34, 0.1);">
+                        <i class="fas fa-phone-alt" style="color: var(--sgb-orange);"></i>
+                    </div>
+                    <div>
+                        {% if carteira.agente_comercial %}
+                            <h5 class="fw-bold mb-0 text-dark">{{ carteira.agente_comercial.username }}</h5>
+                            <form method="post" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="acao" value="remover_agente">
+                                <button type="submit" class="btn btn-link p-0 text-danger text-decoration-none small fw-bold">Remover</button>
+                            </form>
+                        {% else %}
+                            <h5 class="fw-bold mb-0 text-muted fst-italic">Sem Estagiário</h5>
+                        {% endif %}
+                    </div>
+                </div>
+                <form method="post" class="d-flex gap-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="definir_agente">
+                    <select name="agente_id" class="form-select form-select-sm shadow-sm border-orange" required>
+                        <option value="" selected disabled>Atribuir Estagiário...</option>
+                        {% for u in usuarios %}
+                        <option value="{{ u.id }}">{{ u.username }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-orange text-white px-3" style="background-color: var(--sgb-orange);">Definir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Listas de Clientes (Inferior da Tela) -->
+<div class="row">
+    <!-- COLUNA ESQUERDA: CLIENTES LIVRES -->
+    <div class="col-md-5 mb-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-bottom pt-3 pb-2 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold text-uppercase text-muted mb-0 small">Clientes Disponíveis</h6>
+                <span class="badge bg-light text-dark border">{{ clientes_livres.count }}</span>
+            </div>
+            <div class="card-body p-0">
+                <form method="post" class="p-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="adicionar_clientes">
+                    
+                    <div class="list-group mb-3" style="max-height: 500px; overflow-y: auto;">
+                        {% for cl in clientes_livres %}
+                        <label class="list-group-item d-flex justify-content-between align-items-center hover-bg-light p-3" style="cursor: pointer;">
+                            <div class="d-flex align-items-center">
+                                <input class="form-check-input me-3 shadow-sm border-secondary" type="checkbox" name="clientes_ids" value="{{ cl.id }}" style="transform: scale(1.2);">
+                                <div>
+                                    <h6 class="mb-0 text-dark fw-bold" style="font-size: 0.9rem;">{{ cl.nome }}</h6>
+                                    <div class="d-flex align-items-center gap-2 mt-1">
+                                        <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">
+                                            <i class="fas fa-map-marker-alt me-1"></i>{{ cl.bairro }}
+                                        </span>
+                                        {% if cl.divida_atual > 0 %}
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25" style="font-size: 0.65rem;">
+                                                R$ {{ cl.divida_atual }}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </label>
+                        {% empty %}
+                        <div class="text-center p-5 text-muted">
+                            <i class="fas fa-box-open fa-3x mb-3 opacity-25"></i>
+                            <p class="mb-0 small fw-bold">Nenhum cliente livre.</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <button type="submit" class="btn btn-outline-primary w-100 fw-bold shadow-sm py-2 text-uppercase" style="font-size: 0.85rem;">
+                        <i class="fas fa-arrow-right me-2"></i> Mover p/ Carteira
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- COLUNA DIREITA: MEMBROS DESTA CARTEIRA -->
+    <div class="col-md-7 mb-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-bottom pt-3 pb-2 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold text-uppercase text-muted mb-0 small">Membros da Carteira</h6>
+                <span class="badge bg-light text-dark border">{{ clientes.count }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush" style="max-height: 550px; overflow-y: auto;">
+                    {% for c in clientes %}
+                    <div class="list-group-item p-3 hover-bg-light transition-hover">
+                        <div class="d-flex justify-content-between align-items-center">
+                            
+                            <!-- Avatar e Dados Base -->
+                            <div class="d-flex align-items-center">
+                                <div class="bg-light rounded-circle d-flex justify-content-center align-items-center me-3 border" style="width: 42px; height: 42px;">
+                                    <i class="fas fa-user text-secondary opacity-75"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-0 text-dark fw-bold" style="font-size: 0.95rem;">{{ c.nome }}</h6>
+                                    <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                                        <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">
+                                            <i class="fas fa-map-pin me-1"></i> {{ c.bairro }}
+                                        </span>
+                                        <small class="text-muted" style="font-size: 0.75rem;">
+                                            <i class="fas fa-phone-alt ms-1 me-1 text-secondary opacity-75"></i> {{ c.telefone|default:"S/N" }}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Indicadores e Ação -->
+                            <div class="d-flex align-items-center gap-3">
+                                <!-- Status Financeiro -->
+                                <div class="text-end d-none d-sm-block">
+                                    {% if c.divida_atual > 0 %}
+                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 shadow-sm px-2 py-1">
+                                            R$ {{ c.divida_atual }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 shadow-sm px-2 py-1">
+                                            <i class="fas fa-check-circle me-1"></i> Em dia
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Botão Remover -->
+                                <form method="post" class="m-0">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="acao" value="remover_cliente">
+                                    <input type="hidden" name="remover_id" value="{{ c.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0 hover-opacity-100 rounded-circle" style="width: 32px; height: 32px; padding: 0;" title="Remover da Carteira">
+                                        <i class="fas fa-user-minus"></i>
+                                    </button>
+                                </form>
+                            </div>
+                            
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center p-5 text-muted">
+                        <i class="fas fa-users-slash fa-4x mb-3 opacity-25"></i>
+                        <h6 class="fw-bold text-dark">Carteira Vazia</h6>
+                        <p class="small mb-0">Selecione clientes na lista ao lado ou importe uma planilha para começar.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Oculto de Importação -->
+<div class="modal fade" id="modalImportarCSV" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-file-excel text-success me-2"></i> Importar Planilha (CSV)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="importar_csv">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">Selecione o Ficheiro (.csv)</label>
+                        <input class="form-control" type="file" name="arquivo_csv" accept=".csv" required>
+                    </div>
+                    <div class="alert alert-info border-0 bg-info bg-opacity-10 small">
+                        <i class="fas fa-info-circle me-1"></i> O ficheiro deve ser guardado como <strong>CSV UTF-8 (separado por vírgulas)</strong> no Excel e conter as colunas "Nome Resp." e "Endereços".
+                    </div>
+                    <button type="submit" class="btn btn-dark w-100 fw-bold py-2 shadow-sm">Processar Planilha</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .border-orange { border-color: var(--sgb-orange) !important; }
+    .text-orange { color: var(--sgb-orange) !important; }
+    .hover-bg-light:hover { background-color: #f8f9fa; }
+    .hover-opacity-100:hover { background-color: #dc3545; color: white; }
+    .transition-hover { transition: all 0.2s ease; }
+</style>
+{% endblock %}

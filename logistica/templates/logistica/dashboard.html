@@ -1,0 +1,300 @@
+{% extends 'logistica/base.html' %}
+
+{% block content %}
+<!-- Dependência para Gráficos Dinâmicos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- ==========================================
+     CABEÇALHO & FILTRO TEMPORAL
+=========================================== -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+    <div>
+        <h4 class="fw-bold mb-0 text-dark text-uppercase" style="letter-spacing: 0.5px;">
+            <i class="fas fa-chart-line me-2" style="color: var(--sgb-orange);"></i> Dashboard Gerencial
+        </h4>
+        <small class="text-muted">Visão Estratégica e Inteligência de Mercado</small>
+    </div>
+    
+    <div class="d-flex align-items-center bg-white p-2 rounded shadow-sm border" style="min-width: 250px;">
+        <label class="me-2 text-muted small fw-bold mb-0 text-uppercase ps-2"><i class="far fa-calendar-alt me-1"></i> Data:</label>
+        <form method="get" class="m-0 flex-grow-1">
+            <input type="date" name="data" 
+                   value="{{ data_atual|date:'Y-m-d' }}" 
+                   class="form-control form-control-sm border-0 bg-transparent fw-bold text-dark w-100" 
+                   style="outline: none; box-shadow: none; cursor: pointer;"
+                   onchange="this.form.submit()">
+        </form>
+    </div>
+</div>
+
+<!-- ==========================================
+     BLOCO 1: MÉTRICA PRINCIPAL (CAIXA)
+=========================================== -->
+<div class="card border-0 mb-4 shadow-sm" style="background-color: var(--sgb-orange); color: white; border-radius: 12px;">
+    <div class="card-body text-center py-5 position-relative overflow-hidden">
+        <!-- Ícone de Fundo (Marca de Água) -->
+        <i class="fas fa-coins position-absolute" style="font-size: 160px; opacity: 0.08; right: 10%; top: -20px; transform: rotate(-15deg);"></i>
+        
+        <p class="small text-uppercase fw-bold mb-2" style="letter-spacing: 1.5px; opacity: 0.9;">
+            Faturamento Consolidado • {{ data_atual|date:"d/m/Y" }}
+        </p>
+        <h1 class="display-3 fw-bold mb-3" style="letter-spacing: -1.5px;">
+            R$ {{ total_dinheiro|default:"0.00"|floatformat:2 }}
+        </h1>
+        <div class="d-inline-block bg-white text-dark px-4 py-2 rounded-pill small fw-bold shadow-sm">
+            <i class="fas fa-wallet text-success me-2"></i> Caixa do Dia
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     BLOCO 2: INDICADORES DE PERFORMANCE (KPIs)
+=========================================== -->
+<div class="row g-3 mb-4 text-center">
+    <!-- Visitas Totais -->
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100 py-4 hover-scale transition-hover">
+            <i class="fas fa-motorcycle fa-2x mb-2 text-muted opacity-50"></i>
+            <h2 class="fw-bold mb-1 text-dark">{{ realizadas|default:"0" }}</h2>
+            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">Visitas Feitas</small>
+        </div>
+    </div>
+    
+    <!-- Vendas (Sucesso) -->
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100 py-4 hover-scale transition-hover border-bottom border-success border-3">
+            <i class="fas fa-hand-holding-usd fa-2x mb-2 text-success opacity-75"></i>
+            <h2 class="fw-bold mb-1 text-dark">{{ qtd_vendas|default:"0" }}</h2>
+            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">Vendas Sucesso</small>
+        </div>
+    </div>
+    
+    <!-- Inativos (Risco de Churn) -->
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100 py-4 hover-scale transition-hover border-bottom border-danger border-3">
+            <i class="fas fa-user-clock fa-2x mb-2 text-danger opacity-75"></i>
+            <h2 class="fw-bold mb-1 text-danger">{{ qtd_inativos|default:"0" }}</h2>
+            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">Base Inativa (>15d)</small>
+        </div>
+    </div>
+    
+    <!-- Ligações (Ação Imediata) -->
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100 py-4 hover-scale transition-hover border-bottom border-warning border-3">
+            <i class="fas fa-headset fa-2x mb-2 text-warning opacity-75"></i>
+            <h2 class="fw-bold mb-1 text-dark">{{ qtd_ligacoes|default:"0" }}</h2>
+            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">Ligar Hoje (Atrasos)</small>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     BLOCO 3: INTELIGÊNCIA VISUAL (GRÁFICOS)
+=========================================== -->
+<div class="row g-4 mb-5">
+    
+    <!-- Gráfico 1: Taxa de Conversão -->
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100 p-4">
+            <h6 class="fw-bold text-uppercase text-muted mb-4 text-center" style="font-size: 0.8rem; letter-spacing: 0.5px;">
+                Taxa de Conversão Diária
+            </h6>
+            <!-- Container Relativo para garantir responsividade do Chart.js -->
+            <div style="position: relative; height: 260px; width: 100%;">
+                <canvas id="conversionChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico 2: Análise de Perdas -->
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100 p-4">
+            <h6 class="fw-bold text-uppercase text-muted mb-4 text-center" style="font-size: 0.8rem; letter-spacing: 0.5px;">
+                Onde perdemos negócio hoje?
+            </h6>
+            <div style="position: relative; height: 260px; width: 100%;">
+                <canvas id="lossChart"></canvas>
+            </div>
+            <div class="text-center mt-3 small text-muted">
+                <i class="fas fa-info-circle me-1"></i> Análise baseada em recusas registadas pelos motoqueiros.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     BLOCO 4: LOG DE MOVIMENTAÇÕES
+=========================================== -->
+<div class="d-flex align-items-center mb-3">
+    <h6 class="fw-bold text-muted text-uppercase small mb-0">
+        <i class="fas fa-history me-2"></i> Últimas Movimentações
+    </h6>
+    <div class="flex-grow-1 ms-3 border-bottom"></div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="list-group list-group-flush rounded">
+        {% for visita in historico %}
+        <div class="list-group-item p-3 border-bottom hover-bg-light transition-hover d-flex justify-content-between align-items-center">
+            
+            <div class="d-flex align-items-center">
+                <!-- Ícone Dinâmico -->
+                <div class="me-3">
+                    {% if visita.status == 'REALIZADA' %}
+                        <div class="bg-success bg-opacity-10 text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                            <i class="fas fa-check"></i>
+                        </div>
+                    {% else %}
+                        <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                            <i class="fas fa-times"></i>
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Informação do Cliente -->
+                <div>
+                    <h6 class="mb-0 fw-bold text-dark">{{ visita.cliente.nome }}</h6>
+                    <small class="text-muted" style="font-size: 0.8rem;">
+                        {% if visita.status == 'REALIZADA' %}
+                            <span class="text-success fw-bold">Sucesso</span> • via {{ visita.rota.motoqueiro.username }}
+                        {% else %}
+                            <span class="text-danger fw-bold">{{ visita.get_motivo_nao_venda_display|default:"Não Vendeu" }}</span>
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+
+            <!-- Valores / Timestamp -->
+            <div class="text-end">
+                <span class="d-block fw-bold fs-6 {% if visita.valor_recebido > 0 %}text-success{% else %}text-muted{% endif %}">
+                    {% if visita.valor_recebido > 0 %}
+                        R$ {{ visita.valor_recebido }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </span>
+                <small class="text-muted font-monospace" style="font-size: 0.75rem;">{{ visita.data_visita|date:"H:i" }}</small>
+            </div>
+        </div>
+        {% empty %}
+        <div class="p-5 text-center text-muted">
+            <i class="fas fa-clipboard-check fa-3x mb-3 opacity-25"></i>
+            <p class="mb-0 fw-bold">Nenhuma movimentação registada para {{ data_atual|date:"d/m/Y" }}.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="pb-5"></div>
+
+<!-- ==========================================
+     SCRIPTS: CONFIGURAÇÃO DOS GRÁFICOS
+=========================================== -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // Dados provindos do Backend Django (com default '0' para evitar erros de JS)
+        const valVendas = Number("{{ qtd_vendas|default:'0' }}") || 0;
+        const valPerdas = Number("{{ qtd_perdas|default:'0' }}") || 0;
+        const valPendentes = Number("{{ pendentes|default:'0' }}") || 0;
+        
+        const valConcorrencia = Number("{{ motivo_concorrencia|default:'0' }}") || 0;
+        const valEstoque = Number("{{ motivo_estoque|default:'0' }}") || 0;
+
+        // --- GRÁFICO 1: DOUGHNUT (Conversão) ---
+        const ctxConversion = document.getElementById('conversionChart').getContext('2d');
+        new Chart(ctxConversion, {
+            type: 'doughnut',
+            data: {
+                labels: ['Sucesso', 'Recusas', 'Pendentes'],
+                datasets: [{
+                    data: [valVendas, valPerdas, valPendentes],
+                    // Paleta Enterprise: Verde, Vermelho, Amarelo Mudo
+                    backgroundColor: ['#198754', '#dc3545', '#ffc107'],
+                    borderWidth: 2,
+                    borderColor: '#ffffff', // Borda branca para separação limpa
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '75%', // Furo interior maior (Design moderno)
+                plugins: {
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { 
+                            usePointStyle: true, 
+                            padding: 20, 
+                            font: { family: 'Segoe UI', weight: '600' } 
+                        } 
+                    },
+                    tooltip: {
+                        backgroundColor: '#1A1A1A',
+                        padding: 12,
+                        cornerRadius: 8,
+                        titleFont: { size: 14 },
+                        bodyFont: { size: 14, weight: 'bold' }
+                    }
+                }
+            }
+        });
+
+        // --- GRÁFICO 2: BAR (Motivos de Perda) ---
+        const ctxLoss = document.getElementById('lossChart').getContext('2d');
+        new Chart(ctxLoss, {
+            type: 'bar',
+            data: {
+                labels: ['Concorrência', 'Ainda tem Gás'],
+                datasets: [{
+                    label: 'Número de Clientes',
+                    data: [valConcorrencia, valEstoque],
+                    // Paleta Brand: Laranja Rotagas (#F26522) e Preto SGB (#1A1A1A)
+                    backgroundColor: ['#F26522', '#1A1A1A'],
+                    borderRadius: 6, // Bordas arredondadas no topo
+                    barThickness: 40, // Largura controlada da barra
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { 
+                        beginAtZero: true, 
+                        ticks: { stepSize: 1, precision: 0 },
+                        grid: { borderDash: [4, 4], color: '#e9ecef' }, // Linhas tracejadas subtis
+                        border: { display: false }
+                    },
+                    x: { 
+                        grid: { display: false }, // Sem grelha vertical
+                        border: { display: false },
+                        ticks: { font: { weight: 'bold' } }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }, // Legenda inútil para gráfico de barras simples
+                    tooltip: {
+                        backgroundColor: '#1A1A1A',
+                        padding: 12,
+                        cornerRadius: 8,
+                        displayColors: false
+                    }
+                }
+            }
+        });
+    });
+</script>
+
+<!-- ==========================================
+     ESTILOS COMPLEMENTARES
+=========================================== -->
+<style>
+    .transition-hover { transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease; }
+    .hover-scale:hover { 
+        transform: translateY(-5px); 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
+    }
+    .hover-bg-light:hover { background-color: #f8f9fa !important; }
+</style>
+
+{% endblock %}

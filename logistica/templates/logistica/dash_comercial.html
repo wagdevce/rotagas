@@ -1,0 +1,371 @@
+{% extends 'logistica/base.html' %}
+
+{% block content %}
+
+<!-- Cabeçalho do Call Center -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0 text-dark text-uppercase" style="letter-spacing: 0.5px;">
+            <i class="fas fa-headset me-2" style="color: var(--sgb-orange);"></i> Painel Comercial
+        </h4>
+        <small class="text-muted">Prospecção Ativa & Recuperação de Base</small>
+    </div>
+    <div class="text-end">
+        <span class="badge bg-dark px-3 py-2 fs-6 shadow-sm">
+            <i class="fas fa-user-tie me-1"></i> Operador: {{ request.user.username }}
+        </span>
+    </div>
+</div>
+
+<!-- ==========================================
+     MÉTRICAS DO DIA (Acompanhamento da Meta)
+=========================================== -->
+<div class="row g-3 mb-4">
+    <!-- Meta de Ligações -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100 py-3 px-4 bg-white" style="border-left: 4px solid var(--sgb-black) !important;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-uppercase text-muted fw-bold" style="font-size: 0.7rem;">Ligações Feitas Hoje</small>
+                    <h2 class="fw-bold mb-0 text-dark">{{ metricas.total_feitas }} <span class="fs-6 fw-normal text-muted">/ {{ metricas.meta_diaria }}</span></h2>
+                </div>
+                <div class="bg-light rounded-circle p-3 text-center">
+                    <i class="fas fa-phone-volume text-dark"></i>
+                </div>
+            </div>
+            <!-- Barra de Progresso da Meta -->
+            <div class="progress mt-3" style="height: 6px;">
+                <div class="progress-bar bg-dark" role="progressbar" style="width: {% widthratio metricas.total_feitas metricas.meta_diaria 100 %}%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vendas Fechadas -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100 py-3 px-4" style="background: linear-gradient(135deg, var(--sgb-orange) 0%, #d1541b 100%); color: white;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-uppercase fw-bold opacity-75" style="font-size: 0.7rem;">Vendas Convertidas</small>
+                    <h2 class="fw-bold mb-0">{{ metricas.vendas_fechadas }}</h2>
+                </div>
+                <div class="bg-white bg-opacity-25 rounded-circle p-3 text-center">
+                    <i class="fas fa-hand-holding-usd text-white"></i>
+                </div>
+            </div>
+            <small class="mt-2 d-block opacity-75"><i class="fas fa-motorcycle me-1"></i> Despachadas p/ Rua</small>
+        </div>
+    </div>
+
+    <!-- Recusas -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100 py-3 px-4 bg-white" style="border-left: 4px solid #dc3545 !important;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-uppercase text-muted fw-bold" style="font-size: 0.7rem;">Recusas / Concorrência</small>
+                    <h2 class="fw-bold mb-0 text-danger">{{ metricas.recusas }}</h2>
+                </div>
+                <div class="bg-danger bg-opacity-10 rounded-circle p-3 text-center">
+                    <i class="fas fa-times text-danger"></i>
+                </div>
+            </div>
+            <small class="mt-2 d-block text-muted">Justificativas salvas na auditoria</small>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     MESA DE LIGAÇÕES (Lista Rápida)
+=========================================== -->
+<div class="card border-0 shadow-sm mb-5">
+    <div class="card-header bg-white border-bottom pt-3 pb-2 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold text-uppercase text-dark mb-0">
+            <i class="fas fa-list-ul me-2"></i> Fila de Prospecção (Mailing)
+        </h6>
+        <span class="badge bg-light text-dark border">{{ clientes.count }} Clientes na Carteira</span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4 text-uppercase small text-muted py-3" style="width: 35%;">Dados do Cliente</th>
+                    <th class="text-uppercase small text-muted py-3 text-center" style="width: 20%;">Contato / WhatsApp</th>
+                    <th class="pe-4 text-uppercase small text-muted py-3 text-end" style="width: 45%;">Ação Rápida</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cliente in clientes %}
+                <tr>
+                    <!-- INFO DO CLIENTE + CONTEXTO -->
+                    <td class="ps-4">
+                        <div class="fw-bold text-dark fs-6">{{ cliente.nome }}</div>
+                        <div class="d-flex gap-2 align-items-center mt-1 flex-wrap">
+                            <span class="badge bg-light text-secondary border">{{ cliente.bairro }}</span>
+                            
+                            <!-- Histórico de Consumo -->
+                            {% if cliente.dias_desde_ultima_compra is not None %}
+                                <span class="badge {% if cliente.is_atrasado %}bg-warning text-dark{% else %}bg-info text-white{% endif %} border-0 shadow-sm" style="font-size: 0.65rem;">
+                                    <i class="fas fa-calendar-check me-1"></i> Comprou há {{ cliente.dias_desde_ultima_compra }} dias
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary text-white border-0 shadow-sm" style="font-size: 0.65rem;">Nunca comprou</span>
+                            {% endif %}
+
+                            <!-- Alerta de Dívida -->
+                            {% if cliente.divida_atual > 0 %}
+                                <span class="badge bg-danger text-white border-0 shadow-sm" style="font-size: 0.65rem;">
+                                    <i class="fas fa-exclamation-triangle me-1"></i> Deve R$ {{ cliente.divida_atual }}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- NÚMERO + BOTÃO WHATSAPP -->
+                    <td class="text-center">
+                        {% if cliente.telefone %}
+                            <div class="d-flex flex-column gap-1 align-items-center">
+                                <a href="tel:{{ cliente.telefone }}" class="fw-bold text-dark text-decoration-none" style="font-size: 1rem;">
+                                    <i class="fas fa-phone-alt text-muted me-1"></i> {{ cliente.telefone }}
+                                </a>
+                                <a href="https://wa.me/55{{ cliente.telefone }}?text=Olá%20{{ cliente.nome|urlencode }},%20aqui%20é%20da%20Rotagas!%20Vi%20que%20seu%20gás%20pode%20estar%20acabando..." 
+                                   target="_blank" 
+                                   class="btn btn-sm btn-success py-0 px-2 fw-bold" 
+                                   style="font-size: 0.7rem; border-radius: 4px;">
+                                    <i class="fab fa-whatsapp me-1"></i> CHAMAR NO ZAP
+                                </a>
+                            </div>
+                        {% else %}
+                            <span class="badge bg-light text-muted border border-dashed rounded-pill">Sem Telefone</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- PAINEL DE AÇÃO -->
+                    <td class="pe-4">
+                        <div class="d-flex gap-2 justify-content-end">
+                            
+                            <!-- 1. Botão Venda -->
+                            <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" name="resultado" value="VENDA_FECHADA" class="btn btn-success fw-bold px-3 shadow-sm hover-up">
+                                    <i class="fas fa-check-circle me-1"></i> Vendeu
+                                </button>
+                            </form>
+                            
+                            <!-- 2. Botão Recusa (Abre o Pop-up Detalhado) -->
+                            <button type="button" class="btn btn-outline-danger fw-bold shadow-sm hover-up"
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#modalRecusaGlobal"
+                                    data-action="{% url 'registrar_ligacao' cliente.id %}"
+                                    data-nome="{{ cliente.nome }}">
+                                <i class="fas fa-thumbs-down"></i> Não Quis
+                            </button>
+
+                            <!-- 3. Botão S/ Atender -->
+                            <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" name="resultado" value="CAIXA_POSTAL" class="btn btn-outline-secondary fw-bold shadow-sm hover-up">
+                                    <i class="fas fa-voicemail"></i> S/ Atender
+                                </button>
+                            </form>
+
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center py-5">
+                        <div class="mb-3 opacity-25">
+                            <i class="fas fa-check-double fa-3x text-success"></i>
+                        </div>
+                        <h5 class="fw-bold text-dark">Mailing Zerado!</h5>
+                        <p class="text-muted small">Você não tem clientes atribuídos na sua carteira. Fale com o gerente.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ==========================================
+     MODAL (POP-UP) DE JUSTIFICATIVA DETALHADA
+=========================================== -->
+<div class="modal fade" id="modalRecusaGlobal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-comment-dots me-2"></i> Detalhes da Recusa</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            
+            <form method="POST" id="formRecusaGlobal">
+                {% csrf_token %}
+                <!-- Campo dinâmico de Resultado (Muda para REAGENDADO se for o caso) -->
+                <input type="hidden" name="resultado" id="input_resultado_comercial" value="RECUSA">
+                
+                <div class="modal-body p-4">
+                    <p class="mb-4 text-muted border-bottom pb-3">Por que o(a) <strong id="recusaClienteNome" class="text-dark">...</strong> não quis comprar hoje?</p>
+                    
+                    <!-- MOTIVO DA RECUSA -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-danger small text-uppercase">Motivo Principal *</label>
+                        <select id="motivo_select_comercial" class="form-select border-danger shadow-sm" onchange="toggleMotivoComercial()" required>
+                            <option value="" selected disabled>-- Selecione o Motivo --</option>
+                            <option value="NAO_PRECISA">📅 Não precisa agora (Agendar Retorno)</option>
+                            <option value="CONCORRENCIA">🚚 Comprou da Concorrência</option>
+                            <option value="OUTROS">📝 Outros / Não Atende</option>
+                        </select>
+                    </div>
+
+                    <!-- SUB-CAMPO: AGENDAMENTO -->
+                    <div id="sub_agendamento_comercial" class="p-3 bg-light rounded-3 border border-dashed mb-3 d-none">
+                        <label class="form-label small fw-bold text-muted mb-2">DATA PARA RETORNO *</label>
+                        <input type="date" id="data_agendamento_comercial" class="form-control cursor-pointer" onclick="this.showPicker()">
+                    </div>
+
+                    <!-- SUB-CAMPO: CONCORRÊNCIA -->
+                    <div id="sub_concorrencia_comercial" class="p-3 bg-light rounded-3 border border-dashed mb-3 d-none">
+                        <h6 class="fw-bold text-uppercase text-muted small mb-3">Dados do Concorrente *</h6>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Cor do Botijão *</label>
+                            <select id="concorrente_empresa_comercial" class="form-select shadow-sm">
+                                <option value="" disabled selected>Escolha...</option>
+                                <option value="Azul (Ultragaz)">Azul (Ultragaz)</option>
+                                <option value="Prata (Liquigás)">Prata (Liquigás)</option>
+                                <option value="Dourado (Nacional)">Dourado (Nacional)</option>
+                                <option value="Outro">Outro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label small text-muted">Preço Pago *</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white">R$</span>
+                                <input type="number" step="0.01" id="concorrente_preco_comercial" class="form-control" placeholder="0.00">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- OBSERVAÇÃO LIVRE -->
+                    <div>
+                        <label class="form-label fw-bold text-muted small text-uppercase">Notas Adicionais</label>
+                        <textarea name="observacao" id="observacao_comercial" class="form-control bg-light border-0 shadow-sm" rows="2" placeholder="Ex: Avisou que vai viajar, achou caro..."></textarea>
+                    </div>
+                    
+                    <div class="alert alert-warning border-0 bg-warning bg-opacity-10 mt-4 mb-0 small text-dark d-flex align-items-center">
+                        <i class="fas fa-info-circle text-warning me-2"></i>
+                        Estes dados detalhados serão enviados para a auditoria gerencial.
+                    </div>
+                </div>
+                
+                <div class="modal-footer bg-white border-0">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger fw-bold px-4 shadow-sm">
+                        <i class="fas fa-save me-1"></i> Confirmar Recusa
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPTS LOCAIS -->
+<style>
+    .hover-up { transition: transform 0.2s; }
+    .hover-up:hover { transform: translateY(-2px); }
+    .badge { letter-spacing: 0.2px; font-weight: 600; }
+    .border-dashed { border-style: dashed !important; border-color: #dee2e6 !important; }
+    .cursor-pointer { cursor: pointer; }
+</style>
+
+<script>
+    // Gerenciador de visibilidade e obrigatoriedade dos campos do Modal
+    function toggleMotivoComercial() {
+        const motivo = document.getElementById('motivo_select_comercial').value;
+        const subAgendamento = document.getElementById('sub_agendamento_comercial');
+        const subConcorrencia = document.getElementById('sub_concorrencia_comercial');
+        const inputResultado = document.getElementById('input_resultado_comercial');
+
+        const inputData = document.getElementById('data_agendamento_comercial');
+        const selectConcEmpresa = document.getElementById('concorrente_empresa_comercial');
+        const inputConcPreco = document.getElementById('concorrente_preco_comercial');
+
+        // Reset Visibilidade
+        subAgendamento.classList.add('d-none');
+        subConcorrencia.classList.add('d-none');
+        
+        // Reset Obrigatoriedade
+        inputData.required = false;
+        selectConcEmpresa.required = false;
+        inputConcPreco.required = false;
+
+        if (motivo === 'NAO_PRECISA') {
+            subAgendamento.classList.remove('d-none');
+            inputData.required = true;
+            inputResultado.value = 'REAGENDADO'; // Mapeia para o status correto da Ligação
+        } else if (motivo === 'CONCORRENCIA') {
+            subConcorrencia.classList.remove('d-none');
+            selectConcEmpresa.required = true;
+            inputConcPreco.required = true;
+            inputResultado.value = 'RECUSA';
+        } else {
+            inputResultado.value = 'RECUSA';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Prepara o modal para abrir com o cliente certo
+        var modalRecusa = document.getElementById('modalRecusaGlobal');
+        if(modalRecusa) {
+            modalRecusa.addEventListener('show.bs.modal', function (event) {
+                var button = event.relatedTarget; 
+                var actionUrl = button.getAttribute('data-action');
+                var nomeCliente = button.getAttribute('data-nome');
+
+                var form = document.getElementById('formRecusaGlobal');
+                var nomeSpan = document.getElementById('recusaClienteNome');
+
+                form.action = actionUrl;
+                nomeSpan.textContent = nomeCliente;
+                
+                // Limpa o modal ao abrir
+                document.getElementById('motivo_select_comercial').value = '';
+                document.getElementById('observacao_comercial').value = '';
+                toggleMotivoComercial();
+            });
+        }
+
+        // TRUQUE INTELIGENTE: Formata os dados preenchidos dentro do campo Observação antes de salvar!
+        var formRecusa = document.getElementById('formRecusaGlobal');
+        if (formRecusa) {
+            formRecusa.addEventListener('submit', function(e) {
+                const motivo = document.getElementById('motivo_select_comercial').value;
+                const obsElement = document.getElementById('observacao_comercial');
+                let baseObs = obsElement.value;
+                let prefix = "";
+
+                if (motivo === 'NAO_PRECISA') {
+                    const dataAg = document.getElementById('data_agendamento_comercial').value;
+                    // Formata a data de AAAA-MM-DD para DD/MM/AAAA (Padrão BR)
+                    let dataBr = dataAg;
+                    if (dataAg) {
+                        const partes = dataAg.split('-');
+                        if(partes.length === 3) dataBr = `${partes[2]}/${partes[1]}/${partes[0]}`;
+                    }
+                    prefix = `[AGENDADO PARA: ${dataBr}] `;
+                } else if (motivo === 'CONCORRENCIA') {
+                    const empresa = document.getElementById('concorrente_empresa_comercial').value;
+                    const preco = document.getElementById('concorrente_preco_comercial').value;
+                    prefix = `[CONCORRÊNCIA: ${empresa} - R$ ${preco}] `;
+                } else if (motivo === 'OUTROS') {
+                    prefix = `[OUTROS] `;
+                }
+
+                // Substitui a observação combinando as etiquetas com o texto livre digitado
+                obsElement.value = prefix + baseObs;
+            });
+        }
+    });
+</script>
+
+{% endblock %}

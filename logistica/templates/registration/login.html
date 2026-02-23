@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acesso ao Sistema | Rotagas</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --sgb-orange: #F26522;
+            --sgb-orange-dark: #d1541b;
+            --sgb-black: #1A1A1A;
+            --sgb-white: #FFFFFF;
+        }
+
+        body, html {
+            height: 100%;
+            background-color: var(--sgb-white);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        /* --- LADO ESQUERDO (BRANDING LARANJA) --- */
+        .brand-panel {
+            /* VOLTA AO LARANJA INSTITUCIONAL */
+            background: linear-gradient(135deg, var(--sgb-orange) 0%, #c44e18 100%);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        /* Textura de fundo sutil para não ficar "chapado" */
+        .brand-panel::before {
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px);
+            background-size: 30px 30px;
+            opacity: 0.3;
+        }
+
+        /* --- O LOGO COMO "CARTÃO" (Adaptado para fundo Laranja) --- */
+        .logo-card {
+            background-color: var(--sgb-white); /* Fundo Branco para destacar no Laranja */
+            width: 140px;
+            height: 140px;
+            border-radius: 28px; /* Cantos bem arredondados (iOS style) */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* Sombra profunda para dar efeito 3D */
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15); 
+            position: relative;
+            z-index: 2;
+            animation: float-card 6s ease-in-out infinite;
+        }
+
+        .logo-icon {
+            color: var(--sgb-orange); /* Ícone Laranja */
+            font-size: 4.5rem;
+        }
+
+        /* Animação de Flutuação */
+        @keyframes float-card {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-12px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .brand-text {
+            margin-top: 40px;
+            z-index: 2;
+            text-align: center;
+        }
+
+        .slogan-text {
+            font-weight: 300;
+            letter-spacing: 1px;
+            opacity: 0.9;
+            margin-top: 10px;
+            font-size: 1.1rem;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            padding-top: 20px;
+            display: inline-block;
+        }
+
+        /* --- LADO DIREITO (FORMULÁRIO CLEAN) --- */
+        .login-heading {
+            font-weight: 800;
+            color: var(--sgb-black);
+            letter-spacing: -0.5px;
+        }
+
+        .form-control {
+            border: 2px solid #f1f3f5;
+            padding: 14px 15px;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: all 0.2s;
+            background-color: #f8f9fa;
+        }
+        
+        .form-control:focus {
+            background-color: #fff;
+            border-color: var(--sgb-black); /* Foco Preto elegante */
+            box-shadow: none;
+        }
+
+        .input-group-text {
+            background: #f8f9fa;
+            border: 2px solid #f1f3f5;
+            border-left: none;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            color: #adb5bd;
+        }
+        
+        .form-control:focus + .input-group-text {
+            border-color: var(--sgb-black);
+            background: #fff;
+        }
+
+        .btn-login {
+            background-color: var(--sgb-black); /* Botão Preto para contraste máximo */
+            color: white;
+            font-weight: 700;
+            padding: 14px;
+            border-radius: 8px;
+            letter-spacing: 0.5px;
+            border: none;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .btn-login:hover {
+            background-color: #333;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 255, 255, 0.15);
+        }
+
+        /* Logo Mobile */
+        .mobile-logo-card {
+            background-color: var(--sgb-orange);
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px auto;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container-fluid h-100">
+        <div class="row h-100">
+            
+            <!-- COLUNA 1: BRANDING (Laranja + Card Branco Flutuante) -->
+            <div class="col-lg-6 col-xl-7 d-none d-lg-flex brand-panel flex-column">
+                
+                <!-- O CARTÃO FLUTUANTE (Branco) -->
+                <div class="logo-card">
+                    <i class="fas fa-fire-flame-simple logo-icon"></i>
+                </div>
+                
+                <div class="brand-text">
+                    <h1 class="display-4 fw-bold mb-0">Rotagas</h1>
+                    <div class="slogan-text">
+                        ENERGIA QUE MOVE SEU NEGÓCIO
+                    </div>
+                </div>
+
+                <!-- Copyright discreto -->
+                <div class="position-absolute bottom-0 mb-4 text-white opacity-50 small">
+                    &copy; 2026 Desenvolvido por WM Soluções. Versão 1.0
+                </div>
+            </div>
+
+            <!-- COLUNA 2: FORMULÁRIO -->
+            <div class="col-12 col-lg-6 col-xl-5 d-flex align-items-center justify-content-center bg-white">
+                <main class="w-100 p-4 p-md-5" style="max-width: 480px;">
+                    
+                    <!-- Cabeçalho Mobile -->
+                    <div class="text-center mb-5 d-lg-none">
+                        <div class="mobile-logo-card shadow-sm">
+                            <i class="fas fa-fire-flame-simple fa-2x"></i>
+                        </div>
+                        <h3 class="fw-bold">Rotagas</h3>
+                    </div>
+
+                    <!-- Cabeçalho Desktop -->
+                    <div class="mb-5 d-none d-lg-block">
+                        <h2 class="login-heading">Bem-vindo!</h2>
+                        <p class="text-muted">Insira suas credenciais para acessar.</p>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        {% if form.errors %}
+                        <div class="alert alert-danger border-0 bg-danger bg-opacity-10 text-danger d-flex align-items-center rounded-3 mb-4" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <div class="small fw-bold">Usuário ou senha incorretos.</div>
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-uppercase text-secondary" style="font-size: 0.75rem;">Usuário</label>
+                            <input type="text" name="username" class="form-control form-control-lg" placeholder="ex: gerente.joao" required autofocus>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between">
+                                <label class="form-label small fw-bold text-uppercase text-secondary" style="font-size: 0.75rem;">Senha</label>
+                                <a href="#" class="small text-decoration-none fw-bold text-dark">Esqueci minha senha</a>
+                            </div>
+                            <div class="input-group">
+                                <input type="password" name="password" class="form-control form-control-lg border-end-0" id="passwordInput" placeholder="••••••••" required>
+                                <span class="input-group-text" onclick="togglePassword()">
+                                    <i class="far fa-eye" id="toggleIcon"></i>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="d-grid mb-4">
+                            <!-- Botão Preto para contrastar com o lado direito branco -->
+                            <button type="submit" class="btn btn-login btn-lg text-uppercase">
+                                Entrar no Sistema
+                            </button>
+                        </div>
+
+                        <div class="text-center text-muted small mt-5">
+                            Problemas no acesso? <a href="#" class="fw-bold text-dark text-decoration-none">Fale com o Suporte</a>
+                        </div>
+                    </form>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function togglePassword() {
+            const passwordInput = document.getElementById('passwordInput');
+            const toggleIcon = document.getElementById('toggleIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
+    </script>
+
+</body>
+</html>

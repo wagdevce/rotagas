@@ -1,0 +1,211 @@
+{% extends 'logistica/base.html' %}
+
+{% block content %}
+
+<!-- Navegação de Topo -->
+<div class="mb-4">
+    <a href="{% url 'home' %}" class="text-decoration-none text-muted small fw-bold text-uppercase hover-scale d-inline-block">
+        <i class="fas fa-arrow-left me-1"></i> Voltar para Rota
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        
+        <!-- Card de Contexto do Cliente -->
+        <div class="card border-0 shadow-sm mb-4 overflow-hidden">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-light rounded-circle p-3 me-3 text-center d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-store text-dark fa-lg"></i>
+                        </div>
+                        <div>
+                            <h4 class="fw-bold text-dark mb-0">{{ visita.cliente.nome }}</h4>
+                            <div class="text-muted small mt-1">
+                                <i class="fas fa-map-marker-alt me-1 text-danger"></i> {{ visita.cliente.endereco }}
+                            </div>
+                        </div>
+                    </div>
+                    <span class="badge bg-light text-dark border font-monospace">ID: {{ visita.cliente.id }}</span>
+                </div>
+
+                <!-- Alerta Financeiro -->
+                <div class="mt-4 p-3 rounded-3 {% if visita.cliente.divida_atual > 0 %}bg-danger bg-opacity-10 border-danger{% else %}bg-success bg-opacity-10 border-success{% endif %} border border-opacity-25 d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="d-block text-uppercase fw-bold {% if visita.cliente.divida_atual > 0 %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.7rem; letter-spacing: 1px;">
+                            {% if visita.cliente.divida_atual > 0 %}Débito em Aberto{% else %}Saldo em Dia{% endif %}
+                        </span>
+                        <small class="text-dark opacity-75">Financeiro do Cliente</small>
+                    </div>
+                    <span class="fs-3 fw-bold {% if visita.cliente.divida_atual > 0 %}text-danger{% else %}text-success{% endif %}">
+                        R$ {{ visita.cliente.divida_atual }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulário de Ação com Validação -->
+        <form method="post" id="formVisita">
+            {% csrf_token %}
+            
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom pt-4 px-4 pb-0">
+                    <h6 class="fw-bold text-uppercase text-muted mb-0" style="font-size: 0.8rem; letter-spacing: 0.5px;">Registro de Atividade</h6>
+                </div>
+
+                <div class="card-body p-4">
+                    
+                    <label class="form-label fw-bold text-dark mb-3">Qual o resultado da visita?</label>
+                    <div class="row g-3 mb-4">
+                        <div class="col-6">
+                            <input type="radio" class="btn-check" name="resultado_venda" id="venda_sim" value="SIM" onchange="toggleForm()" checked>
+                            <label class="btn btn-outline-success w-100 p-3 h-100 d-flex flex-column align-items-center justify-content-center border-2 option-card" for="venda_sim">
+                                <i class="fas fa-hand-holding-usd fa-2x mb-2"></i>
+                                <span class="fw-bold">VENDA REALIZADA</span>
+                            </label>
+                        </div>
+                        <div class="col-6">
+                            <input type="radio" class="btn-check" name="resultado_venda" id="venda_nao" value="NAO" onchange="toggleForm()">
+                            <label class="btn btn-outline-secondary w-100 p-3 h-100 d-flex flex-column align-items-center justify-content-center border-2 option-card" for="venda_nao">
+                                <i class="fas fa-ban fa-2x mb-2"></i>
+                                <span class="fw-bold">NÃO VENDEU</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <hr class="text-muted opacity-10 my-4">
+
+                    <!-- CENÁRIO A: VENDA -->
+                    <div id="bloco_venda">
+                        <label class="form-label fw-bold text-success small text-uppercase">Valor Recebido *</label>
+                        <div class="input-group input-group-lg shadow-sm">
+                            <span class="input-group-text bg-success text-white border-0 fw-bold">R$</span>
+                            <input type="number" step="0.01" name="valor_recebido" class="form-control border-0 bg-light fw-bold text-success fs-2" placeholder="0.00" required>
+                        </div>
+                    </div>
+
+                    <!-- CENÁRIO B: NÃO VENDEU (Campos Obrigatórios Condicionais) -->
+                    <div id="bloco_nao_venda" class="d-none">
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-danger small text-uppercase">Motivo da Recusa *</label>
+                            <select name="motivo_nao_venda" id="motivo_select" class="form-select form-select-lg border-danger shadow-sm" onchange="toggleMotivo()">
+                                <option value="" selected disabled>-- Selecione o Motivo --</option>
+                                <option value="NAO_PRECISA">📅 Não precisa agora (Agendar)</option>
+                                <option value="CONCORRENCIA">🚚 Comprou da Concorrência</option>
+                                <option value="OUTROS">📝 Outros / Ausente</option>
+                            </select>
+                        </div>
+
+                        <!-- Sub-campo: Agendamento -->
+                        <div id="sub_agendamento" class="p-3 bg-light rounded-3 border border-dashed mb-3 d-none">
+                            <label class="form-label small fw-bold text-muted mb-2">DATA PARA RETORNO *</label>
+                            <input type="date" name="data_agendamento" id="data_agendamento" class="form-control form-control-lg cursor-pointer" onclick="this.showPicker()">
+                        </div>
+
+                        <!-- Sub-campo: Concorrência -->
+                        <div id="sub_concorrencia" class="p-3 bg-light rounded-3 border border-dashed mb-3 d-none">
+                            <h6 class="fw-bold text-uppercase text-muted small mb-3">Dados do Concorrente *</h6>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted">Cor do Botijão *</label>
+                                <select name="concorrente_empresa" id="concorrente_empresa" class="form-select shadow-sm">
+                                    <option value="" disabled selected>Escolha...</option>
+                                    <option value="Azul (Ultragaz)">Azul (Ultragaz)</option>
+                                    <option value="Prata (Liquigás)">Prata (Liquigás)</option>
+                                    <option value="Dourado (Nacional)">Dourado (Nacional)</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label small text-muted">Preço Pago *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white">R$</span>
+                                    <input type="number" step="0.01" name="concorrente_preco" id="concorrente_preco" class="form-control" placeholder="0.00">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notas Adicionais -->
+                    <div class="mt-4">
+                        <label class="form-label fw-bold text-muted small text-uppercase">Notas Adicionais</label>
+                        <textarea name="observacao" class="form-control bg-light border-0 shadow-sm" rows="2" placeholder="Ex: Avisou que vai viajar..."></textarea>
+                    </div>
+
+                </div>
+                
+                <div class="card-footer bg-white border-top p-4">
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-dark btn-lg py-3 shadow-sm text-uppercase fw-bold">
+                            <i class="fas fa-save me-2"></i> Consolidar Visita
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .cursor-pointer { cursor: pointer !important; }
+    .option-card { transition: all 0.2s ease; border-style: dashed; }
+    .btn-check:checked + .option-card { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-style: solid; border-width: 2px; }
+    .border-dashed { border-style: dashed !important; border-color: #dee2e6 !important; }
+</style>
+
+<script>
+    /**
+     * Gerenciador de Obrigatoriedade (Required) Dinâmico
+     * Esta função ativa o atributo 'required' apenas nos campos que estão visíveis.
+     */
+    function updateValidationState() {
+        const isVenda = document.getElementById('venda_sim').checked;
+        const motivo = document.getElementById('motivo_select').value;
+
+        // Elementos
+        const inputValor = document.querySelector('[name="valor_recebido"]');
+        const selectMotivo = document.getElementById('motivo_select');
+        const inputData = document.getElementById('data_agendamento');
+        const selectConcEmpresa = document.getElementById('concorrente_empresa');
+        const inputConcPreco = document.getElementById('concorrente_preco');
+
+        // Reset geral de obrigatoriedade
+        inputValor.required = false;
+        selectMotivo.required = false;
+        inputData.required = false;
+        selectConcEmpresa.required = false;
+        inputConcPreco.required = false;
+
+        if (isVenda) {
+            inputValor.required = true;
+        } else {
+            selectMotivo.required = true;
+            if (motivo === 'NAO_PRECISA') {
+                inputData.required = true;
+            } else if (motivo === 'CONCORRENCIA') {
+                selectConcEmpresa.required = true;
+                inputConcPreco.required = true;
+            }
+        }
+    }
+
+    function toggleForm() {
+        const vendeu = document.getElementById('venda_sim').checked;
+        document.getElementById('bloco_venda').classList.toggle('d-none', !vendeu);
+        document.getElementById('bloco_nao_venda').classList.toggle('d-none', vendeu);
+        updateValidationState();
+    }
+
+    function toggleMotivo() {
+        const motivo = document.getElementById('motivo_select').value;
+        document.getElementById('sub_agendamento').classList.toggle('d-none', motivo !== 'NAO_PRECISA');
+        document.getElementById('sub_concorrencia').classList.toggle('d-none', motivo !== 'CONCORRENCIA');
+        updateValidationState();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        toggleForm();
+    });
+</script>
+
+{% endblock %}
