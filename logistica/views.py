@@ -14,7 +14,7 @@ from django.contrib.auth import login
 
 # Importações dos Models locais
 from .models import Visita, Cliente, Rota, Carteira, Ligacao
-
+# TESTE DE PERSISTENCIA DO BANCO DE DADOS
 # --- CONSTANTES DE STATUS ---
 STATUS_PENDENTE = 'PENDENTE'
 STATUS_REALIZADA = 'REALIZADA'
