@@ -6,177 +6,134 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="fw-bold text-uppercase mb-0" style="color: var(--sgb-black); letter-spacing: 0.5px;">
-            <i class="fas fa-map-marked-alt me-2"></i> Mesa de Planejamento
+            <i class="fas fa-map-marked-alt me-2"></i> Mesa de Planeamento
         </h4>
-        <small class="text-muted">Distribuição inteligente de rotas e monitoramento de carteira.</small>
+        <small class="text-muted">Distribuição inteligente de rotas e monitorização de carteiras.</small>
     </div>
+    
+    <!-- BOTÃO DE CADASTRAR CLIENTE (AGORA LOCALIZADO APENAS AQUI) -->
+    <button class="btn btn-dark shadow-sm fw-bold d-none d-md-block" data-bs-toggle="modal" data-bs-target="#modalNovoCliente">
+        <i class="fas fa-user-plus me-1" style="color: var(--sgb-orange);"></i> Novo Cliente
+    </button>
 </div>
 
-<!-- Filtros de Pesquisa (Card Limpo) -->
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body bg-white rounded p-4">
-        <form method="get" class="row g-3 align-items-end">
-            
-            <!-- Filtro 1: Bairro -->
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted text-uppercase" style="font-size: 0.7rem;">Região / Bairro</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light border-end-0"><i class="fas fa-map-marker-alt text-muted"></i></span>
-                    <select name="bairro" class="form-select bg-light border-start-0 shadow-sm" onchange="this.form.submit()" style="cursor: pointer;">
-                        <option value="">Todas as Regiões</option>
-                        {% for b in bairros %}
-                        <option value="{{ b }}" {% if filtro_bairro == b %}selected{% endif %}>{{ b }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <!-- Filtro 2: Carteira -->
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted text-uppercase" style="font-size: 0.7rem;">Carteira</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light border-end-0"><i class="fas fa-tags text-muted"></i></span>
-                    <select name="carteira" class="form-select bg-light border-start-0 shadow-sm" onchange="this.form.submit()" style="cursor: pointer;">
-                        <option value="">Todas as Carteiras</option>
-                        {% for c in carteiras %}
-                        <option value="{{ c.id }}" {% if filtro_carteira == c.id %}selected{% endif %}>{{ c.nome }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <!-- Filtro 3: Status / Inteligência -->
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted text-uppercase" style="font-size: 0.7rem;">Status do Cliente</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light border-end-0"><i class="fas fa-filter text-muted"></i></span>
-                    <select name="status" class="form-select bg-light border-start-0 shadow-sm" onchange="this.form.submit()" style="cursor: pointer;">
-                        <option value="">Todos os Perfis</option>
-                        <option value="ATRASADOS" {% if filtro_status == 'ATRASADOS' %}selected{% endif %}>🕒 Atrasados (Reposição)</option>
-                        <option value="VIRADOS" {% if filtro_status == 'VIRADOS' %}selected{% endif %}>🚨 Virados (Concorrência)</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Contador de Resultados -->
-            <div class="col-md-3 text-end">
-                <span class="badge bg-dark bg-opacity-10 text-dark border p-2 px-3 rounded-pill">
-                    <i class="fas fa-users me-1"></i> {{ clientes|length }} Clientes
-                </span>
-            </div>
-        </form>
-    </div>
+<!-- Filtros de Pesquisa -->
+<div class="card border-0 shadow-sm mb-4 p-3 bg-white">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold">REGIÃO / BAIRRO</label>
+            <select name="bairro" class="form-select shadow-sm" onchange="this.form.submit()">
+                <option value="">Todas as Regiões</option>
+                {% for b in bairros %}
+                <option value="{{ b }}" {% if filtro_bairro == b %}selected{% endif %}>{{ b }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold">CARTEIRA</label>
+            <select name="carteira" class="form-select shadow-sm" onchange="this.form.submit()">
+                <option value="">Todas as Carteiras</option>
+                {% for c in carteiras %}
+                <option value="{{ c.id }}" {% if filtro_carteira == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold">STATUS DO CLIENTE</label>
+            <select name="status" class="form-select shadow-sm" onchange="this.form.submit()">
+                <option value="">Todos os Perfis</option>
+                <option value="ATRASADOS" {% if filtro_status == 'ATRASADOS' %}selected{% endif %}>⚠️ Atrasados (> Média)</option>
+                <option value="VIRADOS" {% if filtro_status == 'VIRADOS' %}selected{% endif %}>🚨 Virados (Concorrência)</option>
+            </select>
+        </div>
+        <div class="col-md-3 text-end">
+            <a href="{% url 'distribuir_rotas' %}" class="btn btn-outline-secondary w-100 fw-bold">Limpar Filtros</a>
+        </div>
+    </form>
 </div>
 
-<!-- Formulário de Despacho (Envolve a Barra Sticky e a Tabela) -->
+<!-- Lista de Clientes e Atribuição -->
 <form method="post">
     {% csrf_token %}
     
-    <!-- BARRA DE AÇÃO FLUTUANTE (Sticky) -->
-    <div class="card border-0 shadow mb-3 sticky-top" style="z-index: 99; top: 80px; background: linear-gradient(to right, #1a1a1a, #2c2c2c);">
-        <div class="card-body py-3 d-flex justify-content-between align-items-center text-white px-4">
-            <div class="d-flex align-items-center">
-                <div class="bg-warning rounded-circle p-2 me-3 text-center d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                    <i class="fas fa-people-carry text-dark"></i>
+    <!-- Barra Preta de Atribuição (Despachar) -->
+    <div class="card border-0 shadow-sm mb-4" style="background-color: var(--sgb-black); color: white;">
+        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center p-3">
+            <div class="d-flex align-items-center mb-3 mb-md-0">
+                <div class="bg-warning text-dark rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 45px; height: 45px;">
+                    <i class="fas fa-route fa-lg"></i>
                 </div>
                 <div>
-                    <h6 class="mb-0 fw-bold text-uppercase" style="font-size: 0.85rem; letter-spacing: 0.5px;">Atribuir Selecionados</h6>
-                    <small class="text-white-50" style="font-size: 0.75rem;">Marque os clientes abaixo e defina o responsável</small>
+                    <h6 class="fw-bold mb-0 text-uppercase">Atribuir Selecionados</h6>
+                    <small class="opacity-75">Marque os clientes abaixo e defina o responsável logístico.</small>
                 </div>
             </div>
-            
-            <div class="d-flex align-items-center gap-2 bg-white bg-opacity-10 p-1 rounded">
-                <select name="motoqueiro_id" class="form-select form-select-sm fw-bold border-0" required style="min-width: 220px; cursor: pointer;">
+            <div class="d-flex gap-2 w-100" style="max-width: 400px;">
+                <select name="motoqueiro_id" class="form-select fw-bold border-0 shadow-sm" required>
                     <option value="" selected disabled>Escolher Motoqueiro...</option>
                     {% for m in motoqueiros %}
-                    <option value="{{ m.id }}">🛵 {{ m.username }}</option>
+                    <option value="{{ m.id }}">{{ m.username }}</option>
                     {% endfor %}
                 </select>
-                
-                <button type="submit" class="btn btn-primary btn-sm fw-bold shadow-sm px-4 text-uppercase">
-                    <i class="fas fa-paper-plane me-2"></i> Despachar
+                <button type="submit" class="btn fw-bold text-uppercase px-4 shadow-sm" style="background-color: var(--sgb-orange); color: white; border:none;">
+                    <i class="fas fa-paper-plane me-1"></i> Despachar
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Tabela de Dados -->
     <div class="card border-0 shadow-sm mb-5">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th style="width: 50px;" class="text-center py-3">
-                            <div class="form-check d-flex justify-content-center">
-                                <input type="checkbox" class="form-check-input shadow-sm" id="checkAll" style="cursor: pointer; border-color: #adb5bd;">
-                            </div>
+                        <th class="ps-4" style="width: 40px;">
+                            <input class="form-check-input border-secondary shadow-sm" type="checkbox" id="checkAll" onclick="toggleChecks(this)" style="transform: scale(1.2);">
                         </th>
-                        <th class="text-uppercase small text-muted py-3 ps-3">Cliente / Contato</th>
+                        <th class="text-uppercase small text-muted py-3">Cliente / Contacto</th>
                         <th class="text-uppercase small text-muted py-3">Inteligência (Tags)</th>
                         <th class="text-uppercase small text-muted py-3">Carteiras</th>
-                        <th class="text-uppercase small text-muted text-end py-3 pe-4">Financeiro</th>
+                        <th class="pe-4 text-uppercase small text-muted text-end py-3">Financeiro</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for cliente in clientes %}
-                    <tr class="transition-hover">
-                        <td class="text-center">
-                            <div class="form-check d-flex justify-content-center">
-                                <input type="checkbox" name="clientes_ids" value="{{ cliente.id }}" class="form-check-input client-check shadow-sm" style="cursor: pointer; border-color: #dee2e6;">
-                            </div>
-                        </td>
-                        <td class="ps-3">
-                            <div class="fw-bold text-dark">{{ cliente.nome }}</div>
-                            <div class="d-flex align-items-center mt-1">
-                                <span class="badge bg-light text-secondary border me-2">{{ cliente.bairro }}</span>
-                                <small class="text-muted text-truncate" style="max-width: 200px;">
-                                    <i class="fas fa-map-pin me-1 text-secondary" style="font-size: 0.7rem;"></i> {{ cliente.endereco }}
-                                </small>
-                            </div>
+                    {% for c in clientes %}
+                    <tr>
+                        <td class="ps-4">
+                            <input class="form-check-input client-check border-secondary shadow-sm" type="checkbox" name="clientes_ids" value="{{ c.id }}" style="transform: scale(1.2);">
                         </td>
                         <td>
-                            <!-- TAGS AUTOMÁTICAS (Lógica @property do Model) -->
-                            <div class="d-flex gap-1 flex-wrap">
-                                {% for tag in cliente.tags_visuais %}
-                                    <span class="badge bg-{{ tag.cor }} border border-{{ tag.cor }} bg-opacity-10 text-{{ tag.cor }} shadow-sm d-flex align-items-center" style="font-size: 0.65rem;">
-                                        <i class="fas {{ tag.icone }} me-1"></i> {{ tag.texto }}
-                                    </span>
-                                {% empty %}
-                                    <span class="badge bg-light text-muted border" style="font-size: 0.65rem;">Normal</span>
-                                {% endfor %}
-                            </div>
+                            <div class="fw-bold text-dark">{{ c.nome }}</div>
+                            <small class="text-muted"><i class="fas fa-map-marker-alt text-danger me-1"></i> {{ c.bairro }} | {{ c.endereco }}</small>
                         </td>
                         <td>
-                            <!-- CARTEIRAS VINCULADAS -->
-                            <div class="d-flex gap-1 flex-wrap">
-                                {% for cart in cliente.carteiras.all %}
-                                <span class="badge rounded-pill text-white shadow-sm" 
-                                      style="background-color: {{ cart.cor_etiqueta }}; font-weight: 500; font-size: 0.65rem; padding: 4px 8px;">
-                                    {{ cart.nome }}
-                                </span>
-                                {% empty %}
-                                <small class="text-muted fst-italic" style="font-size: 0.75rem;">-</small>
-                                {% endfor %}
-                            </div>
+                            {% for tag in c.tags_visuais %}
+                                <span class="badge bg-{{ tag.cor }} border border-{{ tag.cor }} shadow-sm"><i class="fas {{ tag.icone }} me-1"></i> {{ tag.texto }}</span>
+                            {% empty %}
+                                <span class="badge bg-light text-muted border shadow-sm">Normal</span>
+                            {% endfor %}
                         </td>
-                        <td class="text-end pe-4">
-                            {% if cliente.divida_atual > 0 %}
-                                <span class="fw-bold text-danger d-block">R$ {{ cliente.divida_atual }}</span>
-                                <small class="text-danger opacity-75" style="font-size: 0.65rem;">PENDENTE</small>
-                            {% else %}
-                                <span class="fw-bold text-success d-block">R$ 0,00</span>
-                                <small class="text-success opacity-75" style="font-size: 0.65rem;">EM DIA</small>
-                            {% endif %}
+                        <td>
+                            {% for cart in c.carteiras.all %}
+                                <span class="badge rounded-pill shadow-sm" style="background-color: {{ cart.cor_etiqueta }};">{{ cart.nome }}</span>
+                            {% empty %}
+                                <span class="text-muted small">-</span>
+                            {% endfor %}
+                        </td>
+                        <td class="pe-4 text-end">
+                            <div class="fw-bold fs-6 {% if c.divida_atual > 0 %}text-danger{% else %}text-success{% endif %}">
+                                R$ {{ c.divida_atual }}
+                            </div>
+                            <small class="text-muted" style="font-size: 0.65rem; text-transform: uppercase; font-weight: bold;">
+                                {% if c.divida_atual > 0 %}Em Aberto{% else %}Em Dia{% endif %}
+                            </small>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center py-5">
-                            <div class="opacity-25 mb-3">
-                                <i class="fas fa-search fa-3x text-secondary"></i>
-                            </div>
-                            <h6 class="fw-bold text-muted">Nenhum cliente encontrado</h6>
-                            <p class="small text-muted mb-0">Tente ajustar os filtros acima.</p>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <i class="fas fa-search fa-3x mb-3 opacity-25"></i>
+                            <p class="mb-0 fw-bold">Nenhum cliente encontrado com estes filtros.</p>
                         </td>
                     </tr>
                     {% endfor %}
@@ -186,20 +143,56 @@
     </div>
 </form>
 
-<style>
-    .transition-hover:hover { background-color: #f8f9fa; }
-    /* Ajuste fino para a barra sticky não colar feio se tiver margem no body */
-    .sticky-top { top: 75px; z-index: 1020; } 
-</style>
+<!-- ==========================================
+     MODAL LOCAL: CADASTRAR NOVO CLIENTE
+=========================================== -->
+<div class="modal fade" id="modalNovoCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-user-plus me-2" style="color: var(--sgb-orange);"></i> Cadastro Rápido
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="post" action="{% url 'cadastrar_cliente' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">NOME DO CLIENTE *</label>
+                        <input type="text" name="nome" class="form-control form-control-lg fw-bold text-dark shadow-sm" required placeholder="Ex: Maria da Silva">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">TELEFONE (ZAP)</label>
+                            <input type="text" name="telefone" class="form-control shadow-sm" placeholder="Ex: 85999999999">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">BAIRRO *</label>
+                            <input type="text" name="bairro" class="form-control shadow-sm" required placeholder="Ex: Centro">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-bold">ENDEREÇO COMPLETO</label>
+                        <input type="text" name="endereco" class="form-control shadow-sm" placeholder="Ex: Rua das Flores, 123">
+                    </div>
+                    <button type="submit" class="btn btn-dark w-100 fw-bold py-3 shadow-sm text-uppercase">
+                        Salvar Cliente
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
-    // Script para Selecionar Todos
-    document.getElementById('checkAll').addEventListener('change', function() {
-        var checkboxes = document.querySelectorAll('.client-check');
-        for (var checkbox of checkboxes) { 
-            checkbox.checked = this.checked; 
+    // Função para marcar/desmarcar todos os clientes de uma vez
+    function toggleChecks(source) {
+        checkboxes = document.querySelectorAll('.client-check');
+        for(var i=0, n=checkboxes.length;i<n;i++) {
+            checkboxes[i].checked = source.checked;
         }
-    });
+    }
 </script>
 
 {% endblock %}
