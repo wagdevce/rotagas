@@ -73,12 +73,18 @@ WSGI_APPLICATION = 'core_rotas.wsgi.application'
 
 # --- BANCO DE DADOS (HÍBRIDO) ---
 # Se estiver na Railway, usa o Postgres. Se estiver local, usa o SQLite.
+import dj_database_url
+
+# Configuração robusta de banco de dados
 DATABASES = {
     'default': dj_database_url.config(
-        default='sqlite:///' + os.path.join(BASE_DIR, 'db.sqlite3'),
-        conn_max_age=600
+        # Se não houver DATABASE_URL (local), usa SQLite
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=600,
+        conn_health_checks=True,
     )
 }
+
 
 # --- VALIDAÇÃO DE SENHAS ---
 # Simplificado para o MVP. Em produção real, deve ser mais rigoroso.
