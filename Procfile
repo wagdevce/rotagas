@@ -1,1 +1,1 @@
-web: gunicorn core_rotas.wsgi
+web: python manage.py collectstatic --noinput && gunicorn core_rotas.wsgi
