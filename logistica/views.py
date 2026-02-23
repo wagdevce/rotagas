@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, connection
 from django.contrib import messages
 
 # Importações dos Models locais
@@ -24,9 +24,57 @@ def converter_valor(valor_str):
     """Converte strings monetárias (ex: 150,00) para Decimal de forma segura."""
     if not valor_str: return Decimal('0.00')
     try:
-        return Decimal(valor_str.replace('.', '').replace(',', '.'))
+        # Limpa pontos de milhar e troca vírgula por ponto decimal
+        valor_limpo = str(valor_str).replace('.', '').replace(',', '.')
+        return Decimal(valor_limpo)
     except (InvalidOperation, ValueError):
         return Decimal('0.00')
+
+# ==============================================================================
+# FUNÇÃO DE EMERGÊNCIA: SETUP DE PERMISSÕES NA NUVEM
+# ==============================================================================
+
+def setup_inicial_nuvem(request):
+    """
+    Promove o utilizador Wagner (ou o logado) a Superuser.
+    Aceda a /setup-emergencia/ uma vez para libertar o seu acesso.
+    """
+    try:
+        # 1. Tenta promover o utilizador Wagner especificamente
+        wagner = User.objects.filter(username='Wagner').first()
+        if wagner:
+            wagner.is_staff = True
+            wagner.is_superuser = True
+            wagner.save()
+            msg_wagner = "✅ Utilizador 'Wagner' promovido a Super-Admin!"
+        else:
+            msg_wagner = "❓ Utilizador 'Wagner' não encontrado via código."
+
+        # 2. Promove também quem estiver logado no momento
+        if request.user.is_authenticated:
+            u = request.user
+            u.is_staff = True
+            u.is_superuser = True
+            u.save()
+            msg_atual = f"✅ Utilizador atual '{u.username}' também foi promovido!"
+        else:
+            msg_atual = "⚠️ Nenhum utilizador logado no navegador para promover."
+
+        # 3. Criar um admin de reserva
+        if not User.objects.filter(username="admin").exists():
+            User.objects.create_superuser("admin", "admin@rotagas.com", "admin123")
+            msg_reserva = "✅ Conta reserva 'admin' criada (senha: admin123)."
+        else:
+            msg_reserva = "ℹ️ Conta 'admin' já existia."
+
+        return render(request, 'logistica/base.html', {
+            'messages': [{'tags': 'success', 'text': f"{msg_wagner} | {msg_atual} | {msg_reserva}"}]
+        })
+
+    except Exception as e:
+        return render(request, 'logistica/base.html', {
+            'messages': [{'tags': 'danger', 'text': f"❌ Erro no Setup: {str(e)}"}]
+        })
 
 # ==============================================================================
 # MÓDULO DE ACESSO E TRÁFEGO
@@ -35,14 +83,19 @@ def converter_valor(valor_str):
 @login_required
 def home(request):
     """Controlador de Tráfego: Redireciona o utilizador conforme o seu perfil."""
+    # 1. Gerentes/Staff -> Dashboard
     if request.user.is_staff: 
         return redirect('dashboard')
     
+    # 2. Agentes Comerciais (Estagiários) -> Cockpit de Ligações
     if request.user.groups.filter(name='Agentes Comerciais').exists() or Carteira.objects.filter(agente_comercial=request.user).exists():
         return redirect('dash_comercial')
 
+    # 3. Motoqueiros -> Lista de entregas do dia
+    hoje = timezone.now().date()
     visitas_pendentes = Visita.objects.select_related('cliente').filter(
         rota__motoqueiro=request.user,
+        rota__data_criacao__date=hoje,
         status=STATUS_PENDENTE
     ).order_by('cliente__bairro', 'cliente__nome')
     
@@ -57,7 +110,7 @@ def home(request):
 def registrar_visita(request, id_visita):
     visita = get_object_or_404(Visita.objects.select_related('cliente', 'rota'), pk=id_visita)
     
-    if visita.rota.motoqueiro != request.user: 
+    if visita.rota.motoqueiro != request.user and not request.user.is_staff: 
         return redirect('home')
 
     if request.method == 'POST':
@@ -91,16 +144,14 @@ def registrar_visita(request, id_visita):
 def dash_comercial(request):
     """Cockpit de Alta Produtividade para o Agente Comercial."""
     carteiras = Carteira.objects.filter(agente_comercial=request.user)
-    
     hoje = timezone.now().date()
     
-    # 1. Pega os IDs de todos os clientes que o estagiário JÁ LIGOU hoje
+    # Exclui clientes que já receberam ligação hoje para não repetir
     clientes_ja_ligados = Ligacao.objects.filter(
         agente=request.user, 
         data_ligacao__date=hoje
     ).values_list('cliente_id', flat=True)
 
-    # 2. Busca os clientes da carteira, mas EXCLUI os que já foram ligados
     clientes = Cliente.objects.filter(
         carteiras__in=carteiras
     ).exclude(
@@ -109,7 +160,6 @@ def dash_comercial(request):
 
     ligacoes_hoje = Ligacao.objects.filter(agente=request.user, data_ligacao__date=hoje)
     
-    # AQUI ESTAVA O ERRO DE SINTAXE DO CÓDIGO ANTERIOR:
     metricas = {
         'total_feitas': ligacoes_hoje.count(),
         'vendas_fechadas': ligacoes_hoje.filter(resultado='VENDA_FECHADA').count(),
@@ -133,6 +183,7 @@ def registrar_ligacao(request, cliente_id):
         Ligacao.objects.create(agente=request.user, cliente=cliente, resultado=resultado, observacao=obs)
 
         if resultado == 'VENDA_FECHADA':
+            # Cria entrega automática para o motoqueiro da carteira
             carteira = cliente.carteiras.first()
             motoqueiro = carteira.motoqueiro if carteira else None
             
@@ -147,18 +198,18 @@ def registrar_ligacao(request, cliente_id):
                     rota=rota, 
                     cliente=cliente, 
                     status=STATUS_PENDENTE,
-                    observacao=f"Venda Telemarketing (Por: {request.user.username})"
+                    observacao=f"Venda Telemarketing (Por: {request.user.username}) {obs}"
                 )
-                messages.success(request, f"Venda fechada! {motoqueiro.username} já recebeu a entrega no telemóvel.")
+                messages.success(request, f"Venda fechada! {motoqueiro.username} recebeu a entrega.")
             else:
-                messages.warning(request, "Venda registada, mas este cliente não tem um motoqueiro fixo.")
+                messages.warning(request, "Venda registada, mas cliente sem motoqueiro atribuído.")
         else:
             messages.info(request, f"Contacto registado: {resultado}")
 
     return redirect('dash_comercial')
 
 # ==============================================================================
-# MÓDULO GERENCIAL (AUDITORIA E PLANEAMENTO)
+# MÓDULO GERENCIAL (AUDITORIA E DASHBOARD)
 # ==============================================================================
 
 @login_required
@@ -202,12 +253,9 @@ def relatorio_auditoria(request):
     if not request.user.is_staff: return redirect('home')
     
     data_str = request.GET.get('data')
-    try:
-        data_obj = datetime.datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else timezone.now().date()
-    except ValueError:
-        data_obj = timezone.now().date()
+    data_obj = datetime.datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else timezone.now().date()
     
-    ligacoes = Ligacao.objects.filter(data_ligacao__date=data_obj).select_related('agente', 'cliente').order_by('agente', 'data_ligacao')
+    ligacoes = Ligacao.objects.filter(data_ligacao__date=data_obj).select_related('agente', 'cliente').order_by('data_ligacao')
     
     ranking = Ligacao.objects.filter(data_ligacao__date=data_obj).values('agente__username').annotate(
         total=Count('id'),
@@ -235,8 +283,11 @@ def distribuir_rotas(request):
     if bairro: clientes = clientes.filter(bairro=bairro)
     if carteira_id: clientes = clientes.filter(carteiras__id=carteira_id)
     
-    if status_filter == 'VIRADOS': clientes = [c for c in clientes if c.is_virado]
-    elif status_filter == 'ATRASADOS': clientes = [c for c in clientes if c.is_atrasado]
+    # Filtros inteligentes
+    if status_filter == 'VIRADOS': 
+        clientes = [c for c in clientes if c.is_virado]
+    elif status_filter == 'ATRASADOS': 
+        clientes = [c for c in clientes if c.is_atrasado]
 
     if request.method == 'POST':
         motoqueiro = get_object_or_404(User, id=request.POST.get('motoqueiro_id'))
@@ -244,7 +295,7 @@ def distribuir_rotas(request):
         if c_ids:
             rota = Rota.objects.create(nome=f"Rota {timezone.now().strftime('%d/%m')}", motoqueiro=motoqueiro)
             Visita.objects.bulk_create([Visita(rota=rota, cliente_id=cid) for cid in c_ids])
-            messages.success(request, f"Rota criada com sucesso para {motoqueiro.username}.")
+            messages.success(request, f"Rota enviada para {motoqueiro.username}.")
             return redirect('dashboard')
 
     context = {
@@ -258,6 +309,10 @@ def distribuir_rotas(request):
     }
     return render(request, 'logistica/distribuir_rotas.html', context)
 
+# ==============================================================================
+# GESTÃO DE CARTEIRAS E MOTOR DE IMPORTAÇÃO
+# ==============================================================================
+
 @login_required
 def gerenciar_carteiras(request):
     if not request.user.is_staff: return redirect('home')
@@ -270,10 +325,6 @@ def gerenciar_carteiras(request):
         return redirect('gerenciar_carteiras')
     return render(request, 'logistica/carteiras.html', {'carteiras': Carteira.objects.all().order_by('nome')})
 
-# ==============================================================================
-# MOTOR DE IMPORTAÇÃO ROBUSTO (PLANILHAS)
-# ==============================================================================
-
 @login_required
 @transaction.atomic
 def detalhes_carteira(request, id_carteira):
@@ -283,48 +334,39 @@ def detalhes_carteira(request, id_carteira):
     if request.method == 'POST':
         acao = request.POST.get('acao')
         
+        # Atribuições de Responsáveis
         if acao == 'definir_motoqueiro':
             carteira.motoqueiro_id = request.POST.get('motoqueiro_id')
             carteira.save()
-            messages.success(request, f"Motoqueiro atualizado para: {carteira.motoqueiro.username}")
-            
         elif acao == 'remover_motoqueiro':
             carteira.motoqueiro = None
             carteira.save()
-            messages.info(request, "Motoqueiro removido da carteira.")
-            
         elif acao == 'definir_agente':
             carteira.agente_comercial_id = request.POST.get('agente_id')
             carteira.save()
-            messages.success(request, f"Agente Comercial atualizado para: {carteira.agente_comercial.username}")
-            
         elif acao == 'remover_agente':
             carteira.agente_comercial = None
             carteira.save()
-            messages.info(request, "Agente Comercial removido. A lista de prospecção ficará vazia.")
-            
+        
+        # Movimentação de Clientes
         elif acao == 'remover_cliente':
             carteira.clientes.remove(request.POST.get('remover_id'))
-            
         elif acao == 'adicionar_clientes':
             ids = request.POST.getlist('clientes_ids')
-            if ids:
-                carteira.clientes.add(*ids)
-                messages.success(request, f"{len(ids)} clientes adicionados à carteira.")
+            if ids: carteira.clientes.add(*ids)
         
+        # MOTOR DE IMPORTAÇÃO RESILIENTE
         elif acao == 'importar_csv':
             arquivo = request.FILES.get('arquivo_csv')
             if arquivo:
                 try:
                     decoded = arquivo.read().decode('utf-8', errors='replace')
                     io_string = io.StringIO(decoded)
-                    
                     primeira_linha = io_string.readline()
                     delimiter = ';' if ';' in primeira_linha else ','
                     io_string.seek(0)
                     
                     reader = csv.reader(io_string, delimiter=delimiter)
-                    
                     header, col_map, contagem = [], {}, 0
                     
                     for row in reader:
@@ -333,48 +375,40 @@ def detalhes_carteira(request, id_carteira):
                         
                         if not header:
                             row_lower = [c.lower() for c in row_clean]
-                            if any(x in row_lower for x in ['nome', 'endere', 'telefone', 'bairro']):
-                                header = row_lower
-                                for i, col in enumerate(header):
-                                    if 'nome resp' in col: col_map['nome'] = i
-                                    elif 'nome' in col and 'nome' not in col_map: col_map['nome'] = i
-                                    elif 'endere' in col: col_map['endereco'] = i
-                                    elif 'número' in col or 'numero' in col: col_map['numero'] = i
-                                    elif 'bairro' in col: col_map['bairro'] = i
-                                    elif 'telefone' in col: col_map['telefone'] = i
+                            header = row_lower
+                            for i, col in enumerate(header):
+                                if 'nome resp' in col or ('nome' in col and 'nome' not in col_map): col_map['nome'] = i
+                                elif 'endere' in col: col_map['endereco'] = i
+                                elif 'número' in col or 'numero' in col: col_map['numero'] = i
+                                elif 'bairro' in col: col_map['bairro'] = i
+                                elif 'telefone' in col: col_map['telefone'] = i
                             continue
 
-                        if header and col_map:
+                        if header and 'nome' in col_map:
                             try:
                                 raw_nome = row_clean[col_map['nome']]
-                                if not raw_nome or raw_nome == '--' or raw_nome.replace('.', '').replace('-', '').isdigit():
-                                    continue
+                                if not raw_nome or raw_nome.isdigit(): continue
                                 
-                                end = row_clean[col_map.get('endereco', 0)] if 'endereco' in col_map and len(row_clean) > col_map['endereco'] else ""
-                                num = row_clean[col_map.get('numero', 0)] if 'numero' in col_map and len(row_clean) > col_map['numero'] else ""
-                                bairro = row_clean[col_map.get('bairro', 0)] if 'bairro' in col_map and len(row_clean) > col_map['bairro'] else "Bairro não informado"
-                                tel = row_clean[col_map.get('telefone', 0)] if 'telefone' in col_map and len(row_clean) > col_map['telefone'] else ""
+                                end = row_clean[col_map.get('endereco', 0)] if 'endereco' in col_map else ""
+                                num = row_clean[col_map.get('numero', 0)] if 'numero' in col_map else ""
+                                bairro = row_clean[col_map.get('bairro', 0)] if 'bairro' in col_map else "Bairro não informado"
+                                tel = row_clean[col_map.get('telefone', 0)] if 'telefone' in col_map else ""
                                 
-                                bairro = bairro if bairro != '--' else "Bairro não informado"
-                                tel_limpo = tel.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-                                if tel_limpo == '--': tel_limpo = ""
-                                
-                                cli_obj, created = Cliente.objects.get_or_create(
+                                cli_obj, _ = Cliente.objects.get_or_create(
                                     nome=raw_nome[:100],
                                     defaults={
                                         'endereco': f"{end}, {num}".strip(' ,-'),
                                         'bairro': bairro[:50],
-                                        'telefone': tel_limpo[:20]
+                                        'telefone': tel.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20]
                                     }
                                 )
                                 cli_obj.carteiras.add(carteira)
                                 contagem += 1
-                            except Exception:
-                                continue
-                                
-                    messages.success(request, f"Sucesso! {contagem} clientes foram incorporados.")
+                            except Exception: continue
+                            
+                    messages.success(request, f"Sucesso! {contagem} clientes incorporados.")
                 except Exception as e:
-                    messages.error(request, f"Erro crítico na leitura: {str(e)}")
+                    messages.error(request, f"Erro na leitura: {str(e)}")
                     
         return redirect('detalhes_carteira', id_carteira=id_carteira)
 
