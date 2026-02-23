@@ -21,7 +21,6 @@ STATUS_PENDENTE = 'PENDENTE'
 STATUS_REALIZADA = 'REALIZADA'
 STATUS_NAO_VENDA = 'NAO_VENDA'
 
-# --- UTILITÁRIOS ---
 def converter_valor(valor_str):
     """Converte strings monetárias (ex: 150,00) para Decimal de forma segura."""
     if not valor_str: return Decimal('0.00')
