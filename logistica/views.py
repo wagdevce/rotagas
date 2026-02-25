@@ -21,6 +21,7 @@ STATUS_PENDENTE = 'PENDENTE'
 STATUS_REALIZADA = 'REALIZADA'
 STATUS_NAO_VENDA = 'NAO_VENDA'
 
+# --- UTILITÁRIOS ---
 def converter_valor(valor_str):
     """Converte strings monetárias (ex: 150,00) para Decimal de forma segura."""
     if not valor_str: return Decimal('0.00')
@@ -37,32 +38,21 @@ def converter_valor(valor_str):
 
 def setup_inicial_nuvem(request):
     """
-    Versão "Zero Terminal": Cria as tabelas da base de dados sozinho,
-    cria o seu utilizador e atira-o para dentro do painel.
+    Versão "Zero Terminal": Cria as tabelas da base de dados,
+    cria o utilizador Wagner e faz o login automático.
     """
     try:
-        # 1. A MÁGICA: Executa o 'migrate' sem precisar do terminal!
-        # NOTA: O migrate NÃO apaga dados, ele apenas cria/atualiza as "colunas" da tabela.
         call_command('migrate', interactive=False)
 
-        # 2. Garante que o utilizador Wagner existe e tem permissão máxima
+        # Garante que o utilizador Wagner existe e é superuser
         wagner, _ = User.objects.get_or_create(username__iexact='wagner', defaults={'username': 'Wagner'})
-        wagner.set_password('admin123') # Define a senha padrão
+        wagner.set_password('admin123') 
         wagner.is_staff = True
         wagner.is_superuser = True
         wagner.save()
 
-        # 3. Cria a conta admin de segurança
-        admin_user, _ = User.objects.get_or_create(username='admin')
-        admin_user.set_password('admin123')
-        admin_user.is_staff = True
-        admin_user.is_superuser = True
-        admin_user.save()
-
-        # 4. Faz o login automático com o Wagner
+        # Faz o login automático
         login(request, wagner)
-
-        # 5. Redireciona diretamente para o painel de administração
         return redirect('/admin/')
 
     except Exception as e:
@@ -76,16 +66,13 @@ def setup_inicial_nuvem(request):
 
 @login_required
 def home(request):
-    """Controlador de Tráfego: Redireciona o utilizador conforme o seu perfil."""
-    # 1. Gerentes/Staff -> Dashboard
+    """Encaminha o utilizador conforme o seu cargo."""
     if request.user.is_staff: 
         return redirect('dashboard')
     
-    # 2. Agentes Comerciais (Estagiários) -> Cockpit de Ligações
     if request.user.groups.filter(name='Agentes Comerciais').exists() or Carteira.objects.filter(agente_comercial=request.user).exists():
         return redirect('dash_comercial')
 
-    # 3. Motoqueiros -> Lista de entregas do dia
     hoje = timezone.now().date()
     visitas_pendentes = Visita.objects.select_related('cliente').filter(
         rota__motoqueiro=request.user,
@@ -131,16 +118,14 @@ def registrar_visita(request, id_visita):
     return render(request, 'logistica/registrar_visita.html', {'visita': visita})
 
 # ==============================================================================
-# MÓDULO COMERCIAL (ESTAGIÁRIO / CALL CENTER)
+# MÓDULO COMERCIAL (ESTAGIÁRIO)
 # ==============================================================================
 
 @login_required
 def dash_comercial(request):
-    """Cockpit de Alta Produtividade para o Agente Comercial."""
     carteiras = Carteira.objects.filter(agente_comercial=request.user)
     hoje = timezone.now().date()
     
-    # Exclui clientes que já receberam ligação hoje para não repetir
     clientes_ja_ligados = Ligacao.objects.filter(
         agente=request.user, 
         data_ligacao__date=hoje
@@ -177,7 +162,6 @@ def registrar_ligacao(request, cliente_id):
         Ligacao.objects.create(agente=request.user, cliente=cliente, resultado=resultado, observacao=obs)
 
         if resultado == 'VENDA_FECHADA':
-            # Cria entrega automática para o motoqueiro da carteira
             carteira = cliente.carteiras.first()
             motoqueiro = carteira.motoqueiro if carteira else None
             
@@ -203,7 +187,7 @@ def registrar_ligacao(request, cliente_id):
     return redirect('dash_comercial')
 
 # ==============================================================================
-# MÓDULO GERENCIAL (AUDITORIA E DASHBOARD)
+# MÓDULO GERENCIAL (DASHBOARD E AUDITORIA)
 # ==============================================================================
 
 @login_required
@@ -265,119 +249,24 @@ def relatorio_auditoria(request):
         'visitas_rua': visitas_rua
     })
 
-@login_required
-def distribuir_rotas(request):
-    if not request.user.is_staff: return redirect('home')
-    
-    bairro = request.GET.get('bairro')
-    carteira_id = request.GET.get('carteira')
-    status_filter = request.GET.get('status')
-    
-    clientes = Cliente.objects.all().order_by('bairro', 'nome')
-    if bairro: clientes = clientes.filter(bairro=bairro)
-    if carteira_id: clientes = clientes.filter(carteiras__id=carteira_id)
-    
-    # Filtros inteligentes
-    if status_filter == 'VIRADOS': 
-        clientes = [c for c in clientes if c.is_virado]
-    elif status_filter == 'ATRASADOS': 
-        clientes = [c for c in clientes if c.is_atrasado]
-
-    if request.method == 'POST':
-        motoqueiro = get_object_or_404(User, id=request.POST.get('motoqueiro_id'))
-        c_ids = request.POST.getlist('clientes_ids')
-        if c_ids:
-            rota = Rota.objects.create(nome=f"Rota {timezone.now().strftime('%d/%m')}", motoqueiro=motoqueiro)
-            Visita.objects.bulk_create([Visita(rota=rota, cliente_id=cid) for cid in c_ids])
-            messages.success(request, f"Rota enviada para {motoqueiro.username}.")
-            return redirect('distribuir_rotas')
-
-    context = {
-        'clientes': clientes,
-        'bairros': Cliente.objects.values_list('bairro', flat=True).distinct().order_by('bairro'),
-        'carteiras': Carteira.objects.all(),
-        'motoqueiros': User.objects.filter(is_staff=False),
-        'filtro_bairro': bairro, 
-        'filtro_carteira': int(carteira_id) if carteira_id else None, 
-        'filtro_status': status_filter
-    }
-    return render(request, 'logistica/distribuir_rotas.html', context)
-
 # ==============================================================================
-# GESTÃO DE CARTEIRAS, CADASTROS E IMPORTAÇÃO
+# MESA DE PLANEAMENTO (DISTRIBUIÇÃO E IMPORTAÇÃO MASSIVA)
 # ==============================================================================
-
-@login_required
-def cadastrar_cliente(request):
-    """Permite ao Gerente cadastrar um cliente rapidamente via Pop-up."""
-    if not request.user.is_staff: return redirect('home')
-    
-    if request.method == 'POST':
-        nome = request.POST.get('nome')
-        telefone = request.POST.get('telefone', '')
-        endereco = request.POST.get('endereco', '')
-        bairro = request.POST.get('bairro', 'Não Informado')
-        
-        if nome:
-            Cliente.objects.create(
-                nome=nome,
-                # Limpa o telefone para o padrão do sistema (WhatsApp)
-                telefone=telefone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20],
-                endereco=endereco,
-                bairro=bairro
-            )
-            messages.success(request, f"Cliente {nome} cadastrado com sucesso!")
-        else:
-            messages.error(request, "O nome do cliente é obrigatório.")
-            
-    # Redireciona de volta para a mesma página (Mesa de Planejamento)
-    return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
-
-
-@login_required
-def gerenciar_carteiras(request):
-    if not request.user.is_staff: return redirect('home')
-    if request.method == 'POST':
-        acao = request.POST.get('acao')
-        if acao == 'criar':
-            Carteira.objects.create(nome=request.POST.get('nome'), cor_etiqueta=request.POST.get('cor'))
-        elif acao == 'excluir_carteira':
-            Carteira.objects.filter(id=request.POST.get('id_carteira')).delete()
-        return redirect('gerenciar_carteiras')
-    return render(request, 'logistica/carteiras.html', {'carteiras': Carteira.objects.all().order_by('nome')})
 
 @login_required
 @transaction.atomic
-def detalhes_carteira(request, id_carteira):
+def distribuir_rotas(request):
+    """
+    Controla a Mesa de Planeamento. 
+    Lida com a criação de rotas para motoqueiros E com a importação de CSV geral.
+    """
     if not request.user.is_staff: return redirect('home')
-    carteira = get_object_or_404(Carteira, pk=id_carteira)
     
     if request.method == 'POST':
         acao = request.POST.get('acao')
         
-        # Atribuições de Responsáveis
-        if acao == 'definir_motoqueiro':
-            carteira.motoqueiro_id = request.POST.get('motoqueiro_id')
-            carteira.save()
-        elif acao == 'remover_motoqueiro':
-            carteira.motoqueiro = None
-            carteira.save()
-        elif acao == 'definir_agente':
-            carteira.agente_comercial_id = request.POST.get('agente_id')
-            carteira.save()
-        elif acao == 'remover_agente':
-            carteira.agente_comercial = None
-            carteira.save()
-        
-        # Movimentação de Clientes
-        elif acao == 'remover_cliente':
-            carteira.clientes.remove(request.POST.get('remover_id'))
-        elif acao == 'adicionar_clientes':
-            ids = request.POST.getlist('clientes_ids')
-            if ids: carteira.clientes.add(*ids)
-        
-        # MOTOR DE IMPORTAÇÃO RESILIENTE
-        elif acao == 'importar_csv':
+        # --- NOVO: IMPORTAÇÃO MASSIVA NA MESA DE PLANEAMENTO ---
+        if acao == 'importar_csv':
             arquivo = request.FILES.get('arquivo_csv')
             if arquivo:
                 try:
@@ -415,7 +304,8 @@ def detalhes_carteira(request, id_carteira):
                                 bairro = row_clean[col_map.get('bairro', 0)] if 'bairro' in col_map else "Bairro não informado"
                                 tel = row_clean[col_map.get('telefone', 0)] if 'telefone' in col_map else ""
                                 
-                                cli_obj, _ = Cliente.objects.get_or_create(
+                                # Cria ou atualiza o cliente na base geral
+                                Cliente.objects.get_or_create(
                                     nome=raw_nome[:100],
                                     defaults={
                                         'endereco': f"{end}, {num}".strip(' ,-'),
@@ -423,14 +313,135 @@ def detalhes_carteira(request, id_carteira):
                                         'telefone': tel.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20]
                                     }
                                 )
+                                contagem += 1
+                            except Exception: continue
+                    messages.success(request, f"Sucesso! {contagem} novos clientes adicionados à base.")
+                except Exception as e:
+                    messages.error(request, f"Erro na leitura: {str(e)}")
+            return redirect('distribuir_rotas')
+
+        # --- AÇÃO ORIGINAL: DESPACHAR ROTAS ---
+        else:
+            motoqueiro_id = request.POST.get('motoqueiro_id')
+            c_ids = request.POST.getlist('clientes_ids')
+            if motoqueiro_id and c_ids:
+                motoqueiro = get_object_or_404(User, id=motoqueiro_id)
+                rota = Rota.objects.create(nome=f"Rota {timezone.now().strftime('%d/%m')}", motoqueiro=motoqueiro)
+                Visita.objects.bulk_create([Visita(rota=rota, cliente_id=cid) for cid in c_ids])
+                messages.success(request, f"Rota enviada para {motoqueiro.username}.")
+                return redirect('distribuir_rotas')
+
+    # Lógica de Visualização (GET)
+    bairro = request.GET.get('bairro')
+    carteira_id = request.GET.get('carteira')
+    status_filter = request.GET.get('status')
+    
+    clientes = Cliente.objects.all().order_by('bairro', 'nome')
+    if bairro: clientes = clientes.filter(bairro=bairro)
+    if carteira_id: clientes = clientes.filter(carteiras__id=carteira_id)
+    
+    if status_filter == 'VIRADOS': 
+        clientes = [c for c in clientes if c.is_virado]
+    elif status_filter == 'ATRASADOS': 
+        clientes = [c for c in clientes if c.is_atrasado]
+
+    context = {
+        'clientes': clientes,
+        'bairros': Cliente.objects.values_list('bairro', flat=True).distinct().order_by('bairro'),
+        'carteiras': Carteira.objects.all(),
+        'motoqueiros': User.objects.filter(is_staff=False),
+        'filtro_bairro': bairro, 
+        'filtro_carteira': int(carteira_id) if carteira_id else None, 
+        'filtro_status': status_filter
+    }
+    return render(request, 'logistica/distribuir_rotas.html', context)
+
+# ==============================================================================
+# GESTÃO DE CARTEIRAS, CADASTROS E IMPORTAÇÃO LOCAL
+# ==============================================================================
+
+@login_required
+def cadastrar_cliente(request):
+    if not request.user.is_staff: return redirect('home')
+    if request.method == 'POST':
+        nome = request.POST.get('nome')
+        if nome:
+            Cliente.objects.create(
+                nome=nome,
+                telefone=request.POST.get('telefone', '').replace(' ', '').replace('-', '')[:20],
+                endereco=request.POST.get('endereco', ''),
+                bairro=request.POST.get('bairro', 'Não Informado')
+            )
+            messages.success(request, f"Cliente {nome} cadastrado com sucesso!")
+    return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+
+@login_required
+def gerenciar_carteiras(request):
+    if not request.user.is_staff: return redirect('home')
+    if request.method == 'POST':
+        acao = request.POST.get('acao')
+        if acao == 'criar':
+            Carteira.objects.create(nome=request.POST.get('nome'), cor_etiqueta=request.POST.get('cor'))
+        elif acao == 'excluir_carteira':
+            Carteira.objects.filter(id=request.POST.get('id_carteira')).delete()
+        return redirect('gerenciar_carteiras')
+    return render(request, 'logistica/carteiras.html', {'carteiras': Carteira.objects.all().order_by('nome')})
+
+@login_required
+@transaction.atomic
+def detalhes_carteira(request, id_carteira):
+    if not request.user.is_staff: return redirect('home')
+    carteira = get_object_or_404(Carteira, pk=id_carteira)
+    
+    if request.method == 'POST':
+        acao = request.POST.get('acao')
+        if acao == 'definir_motoqueiro': carteira.motoqueiro_id = request.POST.get('motoqueiro_id')
+        elif acao == 'remover_motoqueiro': carteira.motoqueiro = None
+        elif acao == 'definir_agente': carteira.agente_comercial_id = request.POST.get('agente_id')
+        elif acao == 'remover_agente': carteira.agente_comercial = None
+        elif acao == 'remover_cliente': carteira.clientes.remove(request.POST.get('remover_id'))
+        elif acao == 'adicionar_clientes':
+            ids = request.POST.getlist('clientes_ids')
+            if ids: carteira.clientes.add(*ids)
+        elif acao == 'importar_csv':
+            arquivo = request.FILES.get('arquivo_csv')
+            if arquivo:
+                try:
+                    decoded = arquivo.read().decode('utf-8', errors='replace')
+                    io_string = io.StringIO(decoded)
+                    primeira_linha = io_string.readline()
+                    delimiter = ';' if ';' in primeira_linha else ','
+                    io_string.seek(0)
+                    reader = csv.reader(io_string, delimiter=delimiter)
+                    header, col_map, contagem = [], {}, 0
+                    for row in reader:
+                        row_clean = [str(c).strip() for c in row if c]
+                        if not row_clean: continue
+                        if not header:
+                            row_lower = [c.lower() for c in row_clean]
+                            header = row_lower
+                            for i, col in enumerate(header):
+                                if 'nome resp' in col or ('nome' in col and 'nome' not in col_map): col_map['nome'] = i
+                                elif 'endere' in col: col_map['endereco'] = i
+                                elif 'número' in col or 'numero' in col: col_map['numero'] = i
+                                elif 'bairro' in col: col_map['bairro'] = i
+                                elif 'telefone' in col: col_map['telefone'] = i
+                            continue
+                        if header and 'nome' in col_map:
+                            try:
+                                raw_nome = row_clean[col_map['nome']]
+                                if not raw_nome or raw_nome.isdigit(): continue
+                                end = row_clean[col_map.get('endereco', 0)] if 'endereco' in col_map else ""
+                                num = row_clean[col_map.get('numero', 0)] if 'numero' in col_map else ""
+                                bairro = row_clean[col_map.get('bairro', 0)] if 'bairro' in col_map else "Bairro não informado"
+                                tel = row_clean[col_map.get('telefone', 0)] if 'telefone' in col_map else ""
+                                cli_obj, _ = Cliente.objects.get_or_create(nome=raw_nome[:100], defaults={'endereco': f"{end}, {num}".strip(' ,-'), 'bairro': bairro[:50], 'telefone': tel.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20]})
                                 cli_obj.carteiras.add(carteira)
                                 contagem += 1
                             except Exception: continue
-                            
                     messages.success(request, f"Sucesso! {contagem} clientes incorporados.")
-                except Exception as e:
-                    messages.error(request, f"Erro na leitura: {str(e)}")
-                    
+                except Exception as e: messages.error(request, f"Erro na leitura: {str(e)}")
+        carteira.save()
         return redirect('detalhes_carteira', id_carteira=id_carteira)
 
     context = {

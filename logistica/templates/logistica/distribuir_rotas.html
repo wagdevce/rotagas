@@ -2,26 +2,37 @@
 
 {% block content %}
 
-<!-- Título e Contexto -->
+<!-- ==========================================
+     CABEÇALHO & AÇÕES GLOBAIS
+=========================================== -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="fw-bold text-uppercase mb-0" style="color: var(--sgb-black); letter-spacing: 0.5px;">
-            <i class="fas fa-map-marked-alt me-2"></i> Mesa de Planeamento
+            <i class="fas fa-map-marked-alt me-2" style="color: var(--sgb-orange);"></i> Mesa de Planeamento
         </h4>
-        <small class="text-muted">Distribuição inteligente de rotas e monitorização de carteiras.</small>
+        <small class="text-muted">Gestão centralizada de rotas e alimentação de base de dados.</small>
     </div>
     
-    <!-- BOTÃO DE CADASTRAR CLIENTE (AGORA LOCALIZADO APENAS AQUI) -->
-    <button class="btn btn-dark shadow-sm fw-bold d-none d-md-block" data-bs-toggle="modal" data-bs-target="#modalNovoCliente">
-        <i class="fas fa-user-plus me-1" style="color: var(--sgb-orange);"></i> Novo Cliente
-    </button>
+    <div class="d-flex gap-2">
+        <!-- BOTÃO IMPORTAR CSV -->
+        <button class="btn btn-outline-success shadow-sm fw-bold border-2" data-bs-toggle="modal" data-bs-target="#modalImportarCSV">
+            <i class="fas fa-file-csv me-1"></i> Importar Base
+        </button>
+
+        <!-- BOTÃO NOVO CLIENTE -->
+        <button class="btn btn-dark shadow-sm fw-bold border-0" data-bs-toggle="modal" data-bs-target="#modalNovoCliente">
+            <i class="fas fa-user-plus me-1" style="color: var(--sgb-orange);"></i> Novo Cliente
+        </button>
+    </div>
 </div>
 
-<!-- Filtros de Pesquisa -->
+<!-- ==========================================
+     FILTROS DE INTELIGÊNCIA
+=========================================== -->
 <div class="card border-0 shadow-sm mb-4 p-3 bg-white">
     <form method="get" class="row g-2 align-items-end">
         <div class="col-md-3">
-            <label class="form-label small text-muted fw-bold">REGIÃO / BAIRRO</label>
+            <label class="form-label small text-muted fw-bold text-uppercase">Região / Bairro</label>
             <select name="bairro" class="form-select shadow-sm" onchange="this.form.submit()">
                 <option value="">Todas as Regiões</option>
                 {% for b in bairros %}
@@ -30,45 +41,50 @@
             </select>
         </div>
         <div class="col-md-3">
-            <label class="form-label small text-muted fw-bold">CARTEIRA</label>
+            <label class="form-label small text-muted fw-bold text-uppercase">Carteira de Origem</label>
             <select name="carteira" class="form-select shadow-sm" onchange="this.form.submit()">
                 <option value="">Todas as Carteiras</option>
                 {% for c in carteiras %}
-                <option value="{{ c.id }}" {% if filtro_carteira == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nome }}</option>
+                <option value="{{ c.id }}" {% if filtro_carteira == c.id %}selected{% endif %}>{{ c.nome }}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="col-md-3">
-            <label class="form-label small text-muted fw-bold">STATUS DO CLIENTE</label>
+            <label class="form-label small text-muted fw-bold text-uppercase">Perfil de Compra</label>
             <select name="status" class="form-select shadow-sm" onchange="this.form.submit()">
-                <option value="">Todos os Perfis</option>
-                <option value="ATRASADOS" {% if filtro_status == 'ATRASADOS' %}selected{% endif %}>⚠️ Atrasados (> Média)</option>
-                <option value="VIRADOS" {% if filtro_status == 'VIRADOS' %}selected{% endif %}>🚨 Virados (Concorrência)</option>
+                <option value="">Todos os Clientes</option>
+                <option value="ATRASADOS" {% if filtro_status == 'ATRASADOS' %}selected{% endif %}>⚠️ Atrasados (> Consumo Médio)</option>
+                <option value="VIRADOS" {% if filtro_status == 'VIRADOS' %}selected{% endif %}>🚨 Virados (Perda Concorrência)</option>
             </select>
         </div>
         <div class="col-md-3 text-end">
-            <a href="{% url 'distribuir_rotas' %}" class="btn btn-outline-secondary w-100 fw-bold">Limpar Filtros</a>
+            <a href="{% url 'distribuir_rotas' %}" class="btn btn-light w-100 fw-bold border text-muted">
+                <i class="fas fa-eraser me-1"></i> Limpar Filtros
+            </a>
         </div>
     </form>
 </div>
 
-<!-- Lista de Clientes e Atribuição -->
+<!-- ==========================================
+     MESA DE DESPACHO (LISTA + ATRIBUIÇÃO)
+=========================================== -->
 <form method="post">
     {% csrf_token %}
+    <input type="hidden" name="acao" value="despachar">
     
-    <!-- Barra Preta de Atribuição (Despachar) -->
-    <div class="card border-0 shadow-sm mb-4" style="background-color: var(--sgb-black); color: white;">
+    <!-- Barra Preta de Atribuição (Sticky Top) -->
+    <div class="card border-0 shadow-sm mb-4 sticky-top" style="background-color: var(--sgb-black); color: white; top: 80px; z-index: 1020; border-radius: 12px;">
         <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center p-3">
             <div class="d-flex align-items-center mb-3 mb-md-0">
                 <div class="bg-warning text-dark rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 45px; height: 45px;">
                     <i class="fas fa-route fa-lg"></i>
                 </div>
                 <div>
-                    <h6 class="fw-bold mb-0 text-uppercase">Atribuir Selecionados</h6>
-                    <small class="opacity-75">Marque os clientes abaixo e defina o responsável logístico.</small>
+                    <h6 class="fw-bold mb-0 text-uppercase">Gerar Rota de Entrega</h6>
+                    <small class="opacity-75">Selecione os clientes na lista e defina o motoqueiro.</small>
                 </div>
             </div>
-            <div class="d-flex gap-2 w-100" style="max-width: 400px;">
+            <div class="d-flex gap-2 w-100" style="max-width: 450px;">
                 <select name="motoqueiro_id" class="form-select fw-bold border-0 shadow-sm" required>
                     <option value="" selected disabled>Escolher Motoqueiro...</option>
                     {% for m in motoqueiros %}
@@ -76,12 +92,13 @@
                     {% endfor %}
                 </select>
                 <button type="submit" class="btn fw-bold text-uppercase px-4 shadow-sm" style="background-color: var(--sgb-orange); color: white; border:none;">
-                    <i class="fas fa-paper-plane me-1"></i> Despachar
+                    <i class="fas fa-paper-plane me-2"></i> Despachar
                 </button>
             </div>
         </div>
     </div>
 
+    <!-- Tabela de Clientes -->
     <div class="card border-0 shadow-sm mb-5">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -90,10 +107,10 @@
                         <th class="ps-4" style="width: 40px;">
                             <input class="form-check-input border-secondary shadow-sm" type="checkbox" id="checkAll" onclick="toggleChecks(this)" style="transform: scale(1.2);">
                         </th>
-                        <th class="text-uppercase small text-muted py-3">Cliente / Contacto</th>
-                        <th class="text-uppercase small text-muted py-3">Inteligência (Tags)</th>
-                        <th class="text-uppercase small text-muted py-3">Carteiras</th>
-                        <th class="pe-4 text-uppercase small text-muted text-end py-3">Financeiro</th>
+                        <th class="text-uppercase small text-muted py-3">Cliente / Endereço</th>
+                        <th class="text-uppercase small text-muted py-3">Tags de Inteligência</th>
+                        <th class="text-uppercase small text-muted py-3">Carteira Atual</th>
+                        <th class="pe-4 text-uppercase small text-muted text-end py-3">Saldo</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -108,32 +125,29 @@
                         </td>
                         <td>
                             {% for tag in c.tags_visuais %}
-                                <span class="badge bg-{{ tag.cor }} border border-{{ tag.cor }} shadow-sm"><i class="fas {{ tag.icone }} me-1"></i> {{ tag.texto }}</span>
+                                <span class="badge bg-{{ tag.cor }} shadow-sm border-0 py-2"><i class="fas {{ tag.icone }} me-1"></i> {{ tag.texto }}</span>
                             {% empty %}
-                                <span class="badge bg-light text-muted border shadow-sm">Normal</span>
+                                <span class="badge bg-light text-muted border border-opacity-10 shadow-sm py-2">Perfil Normal</span>
                             {% endfor %}
                         </td>
                         <td>
                             {% for cart in c.carteiras.all %}
-                                <span class="badge rounded-pill shadow-sm" style="background-color: {{ cart.cor_etiqueta }};">{{ cart.nome }}</span>
+                                <span class="badge rounded-pill shadow-sm py-2 px-3 border" style="background-color: {{ cart.cor_etiqueta }};">{{ cart.nome }}</span>
                             {% empty %}
-                                <span class="text-muted small">-</span>
+                                <span class="text-muted small fst-italic">Sem Carteira Atribuída</span>
                             {% endfor %}
                         </td>
                         <td class="pe-4 text-end">
                             <div class="fw-bold fs-6 {% if c.divida_atual > 0 %}text-danger{% else %}text-success{% endif %}">
                                 R$ {{ c.divida_atual }}
                             </div>
-                            <small class="text-muted" style="font-size: 0.65rem; text-transform: uppercase; font-weight: bold;">
-                                {% if c.divida_atual > 0 %}Em Aberto{% else %}Em Dia{% endif %}
-                            </small>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
                         <td colspan="5" class="text-center py-5 text-muted">
                             <i class="fas fa-search fa-3x mb-3 opacity-25"></i>
-                            <p class="mb-0 fw-bold">Nenhum cliente encontrado com estes filtros.</p>
+                            <p class="mb-0 fw-bold">Nenhum cliente disponível para os filtros selecionados.</p>
                         </td>
                     </tr>
                     {% endfor %}
@@ -144,7 +158,41 @@
 </form>
 
 <!-- ==========================================
-     MODAL LOCAL: CADASTRAR NOVO CLIENTE
+     MODAL: IMPORTAR BASE (CSV)
+=========================================== -->
+<div class="modal fade" id="modalImportarCSV" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-file-excel me-2"></i> Importar Clientes via CSV</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="importar_csv">
+                    
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-bold">SELECIONE O ARQUIVO (.CSV)</label>
+                        <input class="form-control form-control-lg" type="file" name="arquivo_csv" accept=".csv" required>
+                        <small class="text-muted mt-2 d-block">O sistema irá ignorar IDs numéricos e focar nos nomes dos clientes.</small>
+                    </div>
+                    
+                    <div class="alert alert-info border-0 bg-info bg-opacity-10 small mb-4">
+                        <i class="fas fa-info-circle me-1"></i> <strong>Nota:</strong> Esta ação adiciona os clientes à <strong>Base Geral</strong>. Após importar, use os filtros acima para distribuí-los em carteiras ou rotas.
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success w-100 fw-bold py-3 shadow-sm text-uppercase">
+                        Processar e Sincronizar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     MODAL: CADASTRO RÁPIDO (MANUAL)
 =========================================== -->
 <div class="modal fade" id="modalNovoCliente" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -159,25 +207,25 @@
                 <form method="post" action="{% url 'cadastrar_cliente' %}">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <label class="form-label text-muted small fw-bold">NOME DO CLIENTE *</label>
-                        <input type="text" name="nome" class="form-control form-control-lg fw-bold text-dark shadow-sm" required placeholder="Ex: Maria da Silva">
+                        <label class="form-label text-muted small fw-bold">Nome Completo do Cliente *</label>
+                        <input type="text" name="nome" class="form-control form-control-lg fw-bold text-dark shadow-sm" required placeholder="Ex: Panificadora Alfa">
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label text-muted small fw-bold">TELEFONE (ZAP)</label>
-                            <input type="text" name="telefone" class="form-control shadow-sm" placeholder="Ex: 85999999999">
+                            <label class="form-label text-muted small fw-bold">WhatsApp / Telefone</label>
+                            <input type="text" name="telefone" class="form-control shadow-sm" placeholder="85999999999">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label text-muted small fw-bold">BAIRRO *</label>
+                            <label class="form-label text-muted small fw-bold">Bairro Principal *</label>
                             <input type="text" name="bairro" class="form-control shadow-sm" required placeholder="Ex: Centro">
                         </div>
                     </div>
                     <div class="mb-4">
-                        <label class="form-label text-muted small fw-bold">ENDEREÇO COMPLETO</label>
+                        <label class="form-label text-muted small fw-bold">Endereço e Número</label>
                         <input type="text" name="endereco" class="form-control shadow-sm" placeholder="Ex: Rua das Flores, 123">
                     </div>
                     <button type="submit" class="btn btn-dark w-100 fw-bold py-3 shadow-sm text-uppercase">
-                        Salvar Cliente
+                        Salvar na Base
                     </button>
                 </form>
             </div>
@@ -186,13 +234,21 @@
 </div>
 
 <script>
-    // Função para marcar/desmarcar todos os clientes de uma vez
+    /**
+     * Alternar todos os checkboxes da lista
+     */
     function toggleChecks(source) {
-        checkboxes = document.querySelectorAll('.client-check');
-        for(var i=0, n=checkboxes.length;i<n;i++) {
-            checkboxes[i].checked = source.checked;
-        }
+        const checkboxes = document.querySelectorAll('.client-check');
+        checkboxes.forEach(chk => {
+            chk.checked = source.checked;
+        });
     }
 </script>
+
+<style>
+    .sticky-top { transition: all 0.3s ease; }
+    .table-hover tbody tr:hover { background-color: rgba(242, 101, 34, 0.03); }
+    .badge { font-weight: 700; letter-spacing: 0.3px; }
+</style>
 
 {% endblock %}
