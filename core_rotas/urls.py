@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 
+# Importando todas as funções, EXCETO a de emergência que foi apagada
 from logistica.views import (
     home, 
     registrar_visita, 
@@ -11,22 +12,18 @@ from logistica.views import (
     distribuir_rotas, 
     gerenciar_carteiras, 
     detalhes_carteira,
-    setup_inicial_nuvem,
     cadastrar_cliente
 )
 
 urlpatterns = [
-    # Painel Administrativo Nativo do Django
+    # Painel Administrativo Oficial
     path('admin/', admin.site.urls),
     
-    # Sistema de Autenticação (Login/Logout)
+    # Autenticação Segura
     path('accounts/', include('django.contrib.auth.urls')),
     
-    # Rota Principal (Controlador de Tráfego)
+    # Rota Principal (Direcionamento por Perfil)
     path('', home, name='home'),
-    
-    # Rota de Emergência para Login / Permissões na Nuvem
-    path('setup-emergencia/', setup_inicial_nuvem, name='setup_emergencia'),
 
     # --- MÓDULO OPERACIONAL (MOTOQUEIRO) ---
     path('visita/<int:id_visita>/', registrar_visita, name='registrar_visita'),
