@@ -181,7 +181,7 @@ def dash_comercial(request):
 @login_required
 @transaction.atomic
 def registrar_ligacao(request, cliente_id):
-    """Processa o clique rápido de prospecção."""
+    """Processa o clique rápido de prospeção."""
     if request.method == 'POST':
         cliente = get_object_or_404(Cliente, pk=cliente_id)
         resultado = request.POST.get('resultado')
@@ -334,6 +334,7 @@ def relatorio_auditoria(request):
 @login_required
 @transaction.atomic
 def distribuir_rotas(request):
+    """Gestão central de alocação e importação de clientes."""
     if not request.user.is_staff: return redirect('home')
     
     if request.method == 'POST':
@@ -390,7 +391,7 @@ def distribuir_rotas(request):
                             except Exception: continue
                     messages.success(request, f"Sucesso! {contagem} novos clientes adicionados à base geral.")
                 except Exception as e:
-                    messages.error(request, f"Erro na leitura: {str(e)}")
+                    messages.error(request, f"Erro na leitura do ficheiro: {str(e)}")
             return redirect('distribuir_rotas')
 
         # --- DISTRIBUIÇÃO MANUAL DE ROTAS ---
@@ -401,7 +402,7 @@ def distribuir_rotas(request):
                 motoqueiro = get_object_or_404(User, id=motoqueiro_id)
                 rota = Rota.objects.create(nome=f"Rota {timezone.now().strftime('%d/%m')}", motoqueiro=motoqueiro)
                 Visita.objects.bulk_create([Visita(rota=rota, cliente_id=int(cid)) for cid in c_ids])
-                messages.success(request, f"Rota enviada para {motoqueiro.username}.")
+                messages.success(request, f"Rota enviada para o telemóvel do {motoqueiro.username}.")
                 return redirect('distribuir_rotas')
 
     bairro = request.GET.get('bairro')
@@ -417,6 +418,8 @@ def distribuir_rotas(request):
         clientes = [c for c in clientes if c.is_virado]
     elif status_filter == 'ATRASADOS': 
         clientes = [c for c in clientes if c.is_atrasado]
+    elif status_filter == 'SEM_HISTORICO': 
+        clientes = [c for c in clientes if c.data_ultima_venda is None] # <-- O novo filtro para recém-importados
 
     context = {
         'clientes': clientes,
@@ -430,7 +433,7 @@ def distribuir_rotas(request):
     return render(request, 'logistica/distribuir_rotas.html', context)
 
 # ==============================================================================
-# GESTÃO DE CARTEIRAS, CADASTROS E IMPORTAÇÃO
+# GESTÃO DE CARTEIRAS, CADASTROS E IMPORTAÇÃO DE ABA
 # ==============================================================================
 
 @login_required
@@ -447,21 +450,20 @@ def cadastrar_cliente(request):
         if nome:
             Cliente.objects.create(
                 nome=nome,
-                # Limpa o telefone para o padrão do sistema (WhatsApp)
                 telefone=telefone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20],
                 endereco=endereco,
                 bairro=bairro
             )
-            messages.success(request, f"Cliente {nome} cadastrado com sucesso!")
+            messages.success(request, f"Cliente {nome} registado com sucesso!")
         else:
             messages.error(request, "O nome do cliente é obrigatório.")
             
-    # Redireciona de volta para a mesma página (Mesa de Planejamento)
     return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
 
 
 @login_required
 def gerenciar_carteiras(request):
+    """Lista e permite a criação/eliminação de grupos de clientes."""
     if not request.user.is_staff: return redirect('home')
     if request.method == 'POST':
         acao = request.POST.get('acao')
@@ -475,6 +477,7 @@ def gerenciar_carteiras(request):
 @login_required
 @transaction.atomic
 def detalhes_carteira(request, id_carteira):
+    """Gestão fina de uma carteira específica e o seu motor de importação."""
     if not request.user.is_staff: return redirect('home')
     carteira = get_object_or_404(Carteira, pk=id_carteira)
     
@@ -495,7 +498,7 @@ def detalhes_carteira(request, id_carteira):
             carteira.agente_comercial = None
             carteira.save()
         
-        # Movimentação de Clientes
+        # Movimentação de Clientes Manuais
         elif acao == 'remover_cliente':
             carteira.clientes.remove(request.POST.get('remover_id'))
         elif acao == 'adicionar_clientes':
@@ -553,7 +556,7 @@ def detalhes_carteira(request, id_carteira):
                                 contagem += 1
                             except Exception: continue
                             
-                    messages.success(request, f"Sucesso! {contagem} clientes incorporados.")
+                    messages.success(request, f"Sucesso! {contagem} clientes incorporados nesta carteira.")
                 except Exception as e:
                     messages.error(request, f"Erro na leitura: {str(e)}")
                     

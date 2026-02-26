@@ -1,190 +1,255 @@
 {% extends 'logistica/base.html' %}
 
 {% block content %}
+
+<!-- ==========================================
+     CABEÇALHO & AÇÕES GLOBAIS
+=========================================== -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h4 class="fw-bold mb-0 text-dark text-uppercase">
-            <i class="fas fa-user-shield me-2" style="color: var(--sgb-orange);"></i> Auditoria de Operação
+        <h4 class="fw-bold text-uppercase mb-0" style="color: var(--sgb-black); letter-spacing: 0.5px;">
+            <i class="fas fa-map-marked-alt me-2" style="color: var(--sgb-orange);"></i> Mesa de Planeamento
         </h4>
-        <small class="text-muted">Clique em qualquer registro para ver detalhes e localização GPS.</small>
+        <small class="text-muted">Gestão centralizada de rotas e alimentação de base de dados.</small>
     </div>
     
-    <div class="bg-white p-2 rounded shadow-sm border d-flex align-items-center">
-        <form method="get" class="m-0 d-flex align-items-center">
-            <label class="me-2 text-muted small fw-bold mb-0">DATA:</label>
-            <input type="date" name="data" value="{{ data_selecionada|date:'Y-m-d' }}" class="form-control form-control-sm border-0 bg-transparent fw-bold" onchange="this.form.submit()">
-        </form>
+    <div class="d-flex gap-2">
+        <!-- BOTÃO IMPORTAR CSV -->
+        <button class="btn btn-outline-success shadow-sm fw-bold border-2" data-bs-toggle="modal" data-bs-target="#modalImportarCSV">
+            <i class="fas fa-file-csv me-1"></i> Importar Base
+        </button>
+
+        <!-- BOTÃO NOVO CLIENTE -->
+        <button class="btn btn-dark shadow-sm fw-bold border-0" data-bs-toggle="modal" data-bs-target="#modalNovoCliente">
+            <i class="fas fa-user-plus me-1" style="color: var(--sgb-orange);"></i> Novo Cliente
+        </button>
     </div>
 </div>
 
-<div class="row g-4">
-    <!-- COLUNA 1: LOG DE CLIQUES CALL CENTER -->
-    <div class="col-md-5">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-bottom pt-3">
-                <h6 class="fw-bold text-uppercase small mb-0">Call Center (Linha do Tempo)</h6>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light sticky-top">
-                            <tr style="font-size: 0.7rem;">
-                                <th class="ps-3">HORA</th>
-                                <th>AGENTE</th>
-                                <th>CLIENTE</th>
-                                <th>RESULTADO</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for lig in ligacoes %}
-                            <tr style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#modalLigacao{{ lig.id }}">
-                                <td class="ps-3 font-monospace small">{{ lig.data_ligacao|date:"H:i:s" }}</td>
-                                <td class="fw-bold small">{{ lig.agente.username }}</td>
-                                <td class="small">{{ lig.cliente.nome|truncatechars:15 }}</td>
-                                <td>
-                                    {% if lig.resultado == 'VENDA_FECHADA' %}
-                                        <span class="badge bg-success">VENDA</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">{{ lig.resultado|truncatechars:6 }}</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="4" class="text-center py-4">Sem ligações</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+<!-- ==========================================
+     FILTROS DE INTELIGÊNCIA
+=========================================== -->
+<div class="card border-0 shadow-sm mb-4 p-3 bg-white">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold text-uppercase">Região / Bairro</label>
+            <select name="bairro" class="form-select shadow-sm" onchange="this.form.submit()">
+                <option value="">Todas as Regiões</option>
+                {% for b in bairros %}
+                <option value="{{ b }}" {% if filtro_bairro == b %}selected{% endif %}>{{ b }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold text-uppercase">Carteira de Origem</label>
+            <select name="carteira" class="form-select shadow-sm" onchange="this.form.submit()">
+                <option value="">Todas as Carteiras</option>
+                {% for c in carteiras %}
+                <option value="{{ c.id }}" {% if filtro_carteira == c.id %}selected{% endif %}>{{ c.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold text-uppercase">Perfil de Compra</label>
+            <select name="status" class="form-select shadow-sm" onchange="this.form.submit()">
+                <option value="">Todos os Clientes</option>
+                <option value="ATRASADOS" {% if filtro_status == 'ATRASADOS' %}selected{% endif %}>⚠️ Atrasados (> Consumo Médio)</option>
+                <option value="VIRADOS" {% if filtro_status == 'VIRADOS' %}selected{% endif %}>🚨 Virados (Perda Concorrência)</option>
+                <option value="SEM_HISTORICO" {% if filtro_status == 'SEM_HISTORICO' %}selected{% endif %}>🆕 Sem Histórico (Novos)</option>
+            </select>
+        </div>
+        <div class="col-md-3 text-end">
+            <a href="{% url 'distribuir_rotas' %}" class="btn btn-light w-100 fw-bold border text-muted">
+                <i class="fas fa-eraser me-1"></i> Limpar Filtros
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- ==========================================
+     MESA DE DESPACHO (LISTA + ATRIBUIÇÃO)
+=========================================== -->
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="acao" value="despachar">
+    
+    <!-- Barra Preta de Atribuição (Sticky Top) -->
+    <div class="card border-0 shadow-sm mb-4 sticky-top" style="background-color: var(--sgb-black); color: white; top: 80px; z-index: 1020; border-radius: 12px;">
+        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center p-3">
+            <div class="d-flex align-items-center mb-3 mb-md-0">
+                <div class="bg-warning text-dark rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 45px; height: 45px;">
+                    <i class="fas fa-route fa-lg"></i>
                 </div>
+                <div>
+                    <h6 class="fw-bold mb-0 text-uppercase">Gerar Rota de Entrega</h6>
+                    <small class="opacity-75">Selecione os clientes na lista e defina o motoqueiro.</small>
+                </div>
+            </div>
+            <div class="d-flex gap-2 w-100" style="max-width: 450px;">
+                <select name="motoqueiro_id" class="form-select fw-bold border-0 shadow-sm" required>
+                    <option value="" selected disabled>Escolher Motoqueiro...</option>
+                    {% for m in motoqueiros %}
+                    <option value="{{ m.id }}">{{ m.username }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn fw-bold text-uppercase px-4 shadow-sm" style="background-color: var(--sgb-orange); color: white; border:none;">
+                    <i class="fas fa-paper-plane me-2"></i> Despachar
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- COLUNA 2: AUDITORIA DE RUA (Onde o GPS aparece) -->
-    <div class="col-md-7">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center pt-3">
-                <h6 class="fw-bold text-uppercase small mb-0">Rua (Entregas e GPS)</h6>
-                <span class="badge bg-dark">{{ visitas_rua.count }} Baixas</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light">
-                            <tr style="font-size: 0.7rem;">
-                                <th class="ps-3">HORA</th>
-                                <th>MOTOQUEIRO</th>
-                                <th>CLIENTE</th>
-                                <th>GPS</th>
-                                <th class="text-end pe-3">VALOR</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for v in visitas_rua %}
-                            <tr style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#modalVisita{{ v.id }}">
-                                <td class="ps-3 font-monospace small text-muted">{{ v.data_visita|date:"H:i" }}</td>
-                                <td class="fw-bold small">{{ v.rota.motoqueiro.username }}</td>
-                                <td class="small">{{ v.cliente.nome|truncatechars:20 }}</td>
-                                <td>
-                                    {% if v.latitude_checkin %}
-                                        <span class="text-success"><i class="fas fa-location-dot"></i> OK</span>
-                                    {% else %}
-                                        <span class="text-muted opacity-50"><i class="fas fa-location-crosshairs"></i> N/A</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-end pe-3 fw-bold {% if v.valor_recebido > 0 %}text-success{% else %}text-muted{% endif %}">
-                                    R$ {{ v.valor_recebido }}
-                                </td>
-                            </tr>
+    <!-- Tabela de Clientes -->
+    <div class="card border-0 shadow-sm mb-5">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4" style="width: 40px;">
+                            <input class="form-check-input border-secondary shadow-sm" type="checkbox" id="checkAll" onclick="toggleChecks(this)" style="transform: scale(1.2);">
+                        </th>
+                        <th class="text-uppercase small text-muted py-3">Cliente / Endereço</th>
+                        <th class="text-uppercase small text-muted py-3">Tags de Inteligência</th>
+                        <th class="text-uppercase small text-muted py-3">Carteira Atual</th>
+                        <th class="pe-4 text-uppercase small text-muted text-end py-3">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in clientes %}
+                    <tr>
+                        <td class="ps-4">
+                            <input class="form-check-input client-check border-secondary shadow-sm" type="checkbox" name="clientes_ids" value="{{ c.id }}" style="transform: scale(1.2);">
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ c.nome }}</div>
+                            <small class="text-muted"><i class="fas fa-map-marker-alt text-danger me-1"></i> {{ c.bairro }} | {{ c.endereco }}</small>
+                        </td>
+                        <td>
+                            {% for tag in c.tags_visuais %}
+                                <span class="badge bg-{{ tag.cor }} shadow-sm border-0 py-2"><i class="fas {{ tag.icone }} me-1"></i> {{ tag.texto }}</span>
+                            {% empty %}
+                                <span class="badge bg-light text-muted border border-opacity-10 shadow-sm py-2">Perfil Normal</span>
                             {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                        </td>
+                        <td>
+                            {% for cart in c.carteiras.all %}
+                                <span class="badge rounded-pill shadow-sm py-2 px-3 border" style="background-color: {{ cart.cor_etiqueta }};">{{ cart.nome }}</span>
+                            {% empty %}
+                                <span class="text-muted small fst-italic">Sem Carteira Atribuída</span>
+                            {% endfor %}
+                        </td>
+                        <td class="pe-4 text-end">
+                            <div class="fw-bold fs-6 {% if c.divida_atual > 0 %}text-danger{% else %}text-success{% endif %}">
+                                R$ {{ c.divida_atual }}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <i class="fas fa-search fa-3x mb-3 opacity-25"></i>
+                            <p class="mb-0 fw-bold">Nenhum cliente disponível para os filtros selecionados.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</form>
+
+<!-- ==========================================
+     MODAL: IMPORTAR BASE (CSV)
+=========================================== -->
+<div class="modal fade" id="modalImportarCSV" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-file-excel me-2"></i> Importar Clientes via CSV</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="importar_csv">
+                    
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-bold">SELECIONE O ARQUIVO (.CSV)</label>
+                        <input class="form-control form-control-lg" type="file" name="arquivo_csv" accept=".csv" required>
+                        <small class="text-muted mt-2 d-block">O sistema irá ignorar IDs numéricos e focar nos nomes dos clientes.</small>
+                    </div>
+                    
+                    <div class="alert alert-info border-0 bg-info bg-opacity-10 small mb-4">
+                        <i class="fas fa-info-circle me-1"></i> <strong>Nota:</strong> Esta ação adiciona os clientes à <strong>Base Geral</strong>. Após importar, use os filtros acima para distribuí-los em carteiras ou rotas.
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success w-100 fw-bold py-3 shadow-sm text-uppercase">
+                        Processar e Sincronizar
+                    </button>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
 <!-- ==========================================
-     MODAIS DE DETALHES (GERADOS DINAMICAMENTE)
+     MODAL: CADASTRO RÁPIDO (MANUAL)
 =========================================== -->
-
-<!-- Modais das Visitas de Rua -->
-{% for v in visitas_rua %}
-<div class="modal fade" id="modalVisita{{ v.id }}" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+<div class="modal fade" id="modalNovoCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
         <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header bg-dark text-white border-0">
-                <h5 class="modal-title fw-bold text-uppercase small"><i class="fas fa-info-circle me-2"></i> Detalhes da Entrega #{{ v.id }}</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-user-plus me-2" style="color: var(--sgb-orange);"></i> Cadastro Rápido
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
-                <div class="text-center mb-4">
-                    <h4 class="fw-bold mb-0 text-dark">{{ v.cliente.nome }}</h4>
-                    <p class="text-muted small"><i class="fas fa-map-marker-alt text-danger"></i> {{ v.cliente.endereco }}</p>
-                </div>
-                
-                <div class="row g-3">
-                    <div class="col-6">
-                        <label class="small fw-bold text-muted text-uppercase">Motoqueiro</label>
-                        <p class="fw-bold text-dark">{{ v.rota.motoqueiro.username }}</p>
+                <form method="post" action="{% url 'cadastrar_cliente' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">Nome Completo do Cliente *</label>
+                        <input type="text" name="nome" class="form-control form-control-lg fw-bold text-dark shadow-sm" required placeholder="Ex: Panificadora Alfa">
                     </div>
-                    <div class="col-6 text-end">
-                        <label class="small fw-bold text-muted text-uppercase">Horário da Baixa</label>
-                        <p class="fw-bold text-dark">{{ v.data_visita|date:"d/m/Y H:i" }}</p>
-                    </div>
-                    
-                    <div class="col-12 bg-light p-3 rounded border border-dashed">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <label class="small fw-bold text-muted text-uppercase">Status da Visita</label>
-                                <h5 class="fw-bold {% if v.status == 'REALIZADA' %}text-success{% else %}text-danger{% endif %} mb-0">
-                                    {{ v.get_status_display }}
-                                </h5>
-                            </div>
-                            <div class="text-end">
-                                <label class="small fw-bold text-muted text-uppercase">Valor Arrecadado</label>
-                                <h5 class="fw-bold text-dark mb-0">R$ {{ v.valor_recebido }}</h5>
-                            </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">WhatsApp / Telefone</label>
+                            <input type="text" name="telefone" class="form-control shadow-sm" placeholder="85999999999">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">Bairro Principal *</label>
+                            <input type="text" name="bairro" class="form-control shadow-sm" required placeholder="Ex: Centro">
                         </div>
                     </div>
-
-                    {% if v.observacao %}
-                    <div class="col-12">
-                        <label class="small fw-bold text-muted text-uppercase">Observações do Campo</label>
-                        <p class="small bg-warning bg-opacity-10 p-2 rounded">{{ v.observacao }}</p>
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-bold">Endereço e Número</label>
+                        <input type="text" name="endereco" class="form-control shadow-sm" placeholder="Ex: Rua das Flores, 123">
                     </div>
-                    {% endif %}
-
-                    <!-- VERIFICAÇÃO DE GPS -->
-                    <div class="col-12 mt-4">
-                        <h6 class="fw-bold text-uppercase small text-muted"><i class="fas fa-street-view me-2"></i> Auditoria de Localização</h6>
-                        {% if v.latitude_checkin %}
-                            <div class="alert alert-success border-0 small d-flex align-items-center">
-                                <i class="fas fa-check-circle fa-2x me-3"></i>
-                                <div>
-                                    Localização capturada com sucesso! O motoqueiro estava nas coordenadas: 
-                                    <br><strong>{{ v.latitude_checkin }}, {{ v.longitude_checkin }}</strong>
-                                </div>
-                            </div>
-                            <a href="https://www.google.com/maps?q={{ v.latitude_checkin }},{{ v.longitude_checkin }}" target="_blank" class="btn btn-dark w-100 fw-bold py-2 shadow-sm">
-                                <i class="fas fa-map-marked-alt me-2 text-warning"></i> VER NO GOOGLE MAPS
-                            </a>
-                        {% else %}
-                            <div class="alert alert-warning border-0 small d-flex align-items-center">
-                                <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
-                                <div>Nenhuma coordenada capturada. Pode ter ocorrido falta de permissão ou erro no sinal de GPS do telemóvel.</div>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
+                    <button type="submit" class="btn btn-dark w-100 fw-bold py-3 shadow-sm text-uppercase">
+                        Salvar na Base
+                    </button>
+                </form>
             </div>
         </div>
     </div>
 </div>
-{% endfor %}
+
+<script>
+    /**
+     * Alternar todos os checkboxes da lista
+     */
+    function toggleChecks(source) {
+        const checkboxes = document.querySelectorAll('.client-check');
+        checkboxes.forEach(chk => {
+            chk.checked = source.checked;
+        });
+    }
+</script>
 
 <style>
-    .table-hover tbody tr:hover { background-color: rgba(242, 101, 34, 0.05); transition: 0.2s; }
-    .border-dashed { border-style: dashed !important; }
+    .sticky-top { transition: all 0.3s ease; }
+    .table-hover tbody tr:hover { background-color: rgba(242, 101, 34, 0.03); }
+    .badge { font-weight: 700; letter-spacing: 0.3px; }
 </style>
+
 {% endblock %}
