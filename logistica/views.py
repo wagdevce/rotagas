@@ -151,6 +151,7 @@ def dash_comercial(request):
     carteiras = Carteira.objects.filter(agente_comercial=request.user)
     hoje = timezone.now().date()
     
+    # Exclui clientes que já receberam ligação hoje para não repetir
     clientes_ja_ligados = Ligacao.objects.filter(
         agente=request.user, 
         data_ligacao__date=hoje
@@ -235,18 +236,27 @@ def registrar_ligacao(request, cliente_id):
 
 @login_required
 def dashboard(request):
-    """Painel de Receitas e Desempenho (Apenas Staff)."""
+    """Painel de Receitas e Desempenho com Filtro de Período."""
     if not request.user.is_staff: return redirect('home')
     
-    data_url = request.GET.get('data')
-    try:
-        data_filtro = datetime.datetime.strptime(data_url, '%Y-%m-%d').date() if data_url else timezone.now().date()
-    except ValueError:
-        data_filtro = timezone.now().date()
-
-    visitas_hoje = Visita.objects.filter(rota__data_criacao__date=data_filtro)
+    # Captura as datas do GET
+    data_inicio_str = request.GET.get('data_inicio')
+    data_fim_str = request.GET.get('data_fim')
+    hoje = timezone.now().date()
     
-    resumo = visitas_hoje.aggregate(
+    try:
+        data_inicio = datetime.datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else hoje
+        data_fim = datetime.datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else hoje
+    except ValueError:
+        data_inicio = hoje
+        data_fim = hoje
+
+    if data_inicio > data_fim:
+        data_inicio, data_fim = data_fim, data_inicio
+
+    visitas_periodo = Visita.objects.filter(rota__data_criacao__date__gte=data_inicio, rota__data_criacao__date__lte=data_fim)
+    
+    resumo = visitas_periodo.aggregate(
         total_recebido=Sum('valor_recebido'),
         pendentes=Count('id', filter=Q(status=STATUS_PENDENTE)),
         vendas=Count('id', filter=Q(status=STATUS_REALIZADA)),
@@ -254,11 +264,10 @@ def dashboard(request):
         estoque=Count('id', filter=Q(motivo_nao_venda='NAO_PRECISA'))
     )
 
-    historico = visitas_hoje.select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
-    qtd_ligacoes = Ligacao.objects.filter(data_ligacao__date=data_filtro).count()
+    historico = visitas_periodo.select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
+    qtd_ligacoes = Ligacao.objects.filter(data_ligacao__date__gte=data_inicio, data_ligacao__date__lte=data_fim).count()
 
     # Base Inativa para KPIs
-    hoje = timezone.now().date()
     limite_inativo = hoje - datetime.timedelta(days=15)
     qtd_inativos = Cliente.objects.filter(
         Q(data_ultima_venda__lt=limite_inativo) | Q(data_ultima_venda__isnull=True)
@@ -275,30 +284,44 @@ def dashboard(request):
         'qtd_ligacoes': qtd_ligacoes,
         'qtd_inativos': qtd_inativos,
         'historico': historico,
-        'data_atual': data_filtro,
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
     })
 
 @login_required
 def relatorio_auditoria(request):
-    """O 'Dedo Duro' - Linha do tempo exata das ações da equipa com lupa GPS."""
+    """O 'Dedo Duro' - Linha do tempo com lupa GPS e filtro de período."""
     if not request.user.is_staff: return redirect('home')
     
-    data_str = request.GET.get('data')
-    data_obj = datetime.datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else timezone.now().date()
+    data_inicio_str = request.GET.get('data_inicio')
+    data_fim_str = request.GET.get('data_fim')
+    hoje = timezone.now().date()
     
-    ligacoes = Ligacao.objects.filter(data_ligacao__date=data_obj).select_related('agente', 'cliente').order_by('-data_ligacao')
+    try:
+        data_inicio = datetime.datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else hoje
+        data_fim = datetime.datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else hoje
+    except ValueError:
+        data_inicio = hoje
+        data_fim = hoje
+
+    if data_inicio > data_fim:
+        data_inicio, data_fim = data_fim, data_inicio
     
-    ranking = Ligacao.objects.filter(data_ligacao__date=data_obj).values('agente__username').annotate(
+    ligacoes = Ligacao.objects.filter(data_ligacao__date__gte=data_inicio, data_ligacao__date__lte=data_fim).select_related('agente', 'cliente').order_by('-data_ligacao')
+    
+    ranking = Ligacao.objects.filter(data_ligacao__date__gte=data_inicio, data_ligacao__date__lte=data_fim).values('agente__username').annotate(
         total=Count('id'),
         vendas=Count('id', filter=Q(resultado='VENDA_FECHADA'))
     ).order_by('-total')
 
     visitas_rua = Visita.objects.filter(
-        data_visita__date=data_obj
+        data_visita__date__gte=data_inicio,
+        data_visita__date__lte=data_fim
     ).exclude(status=STATUS_PENDENTE).select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
 
     return render(request, 'logistica/relatorio_auditoria.html', {
-        'data_selecionada': data_obj,
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
         'ligacoes': ligacoes,
         'ranking_comercial': ranking,
         'visitas_rua': visitas_rua
@@ -407,23 +430,35 @@ def distribuir_rotas(request):
     return render(request, 'logistica/distribuir_rotas.html', context)
 
 # ==============================================================================
-# GESTÃO DE CARTEIRAS, CADASTROS E IMPORTAÇÃO LOCAL
+# GESTÃO DE CARTEIRAS, CADASTROS E IMPORTAÇÃO
 # ==============================================================================
 
 @login_required
 def cadastrar_cliente(request):
+    """Permite ao Gerente cadastrar um cliente rapidamente via Pop-up."""
     if not request.user.is_staff: return redirect('home')
+    
     if request.method == 'POST':
         nome = request.POST.get('nome')
+        telefone = request.POST.get('telefone', '')
+        endereco = request.POST.get('endereco', '')
+        bairro = request.POST.get('bairro', 'Não Informado')
+        
         if nome:
             Cliente.objects.create(
                 nome=nome,
-                telefone=request.POST.get('telefone', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20],
-                endereco=request.POST.get('endereco', ''),
-                bairro=request.POST.get('bairro', 'Não Informado')
+                # Limpa o telefone para o padrão do sistema (WhatsApp)
+                telefone=telefone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20],
+                endereco=endereco,
+                bairro=bairro
             )
             messages.success(request, f"Cliente {nome} cadastrado com sucesso!")
+        else:
+            messages.error(request, "O nome do cliente é obrigatório.")
+            
+    # Redireciona de volta para a mesma página (Mesa de Planejamento)
     return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+
 
 @login_required
 def gerenciar_carteiras(request):
@@ -445,14 +480,29 @@ def detalhes_carteira(request, id_carteira):
     
     if request.method == 'POST':
         acao = request.POST.get('acao')
-        if acao == 'definir_motoqueiro': carteira.motoqueiro_id = request.POST.get('motoqueiro_id')
-        elif acao == 'remover_motoqueiro': carteira.motoqueiro = None
-        elif acao == 'definir_agente': carteira.agente_comercial_id = request.POST.get('agente_id')
-        elif acao == 'remover_agente': carteira.agente_comercial = None
-        elif acao == 'remover_cliente': carteira.clientes.remove(request.POST.get('remover_id'))
+        
+        # Atribuições de Responsáveis
+        if acao == 'definir_motoqueiro':
+            carteira.motoqueiro_id = request.POST.get('motoqueiro_id')
+            carteira.save()
+        elif acao == 'remover_motoqueiro':
+            carteira.motoqueiro = None
+            carteira.save()
+        elif acao == 'definir_agente':
+            carteira.agente_comercial_id = request.POST.get('agente_id')
+            carteira.save()
+        elif acao == 'remover_agente':
+            carteira.agente_comercial = None
+            carteira.save()
+        
+        # Movimentação de Clientes
+        elif acao == 'remover_cliente':
+            carteira.clientes.remove(request.POST.get('remover_id'))
         elif acao == 'adicionar_clientes':
             ids = request.POST.getlist('clientes_ids')
             if ids: carteira.clientes.add(*ids)
+        
+        # MOTOR DE IMPORTAÇÃO RESILIENTE
         elif acao == 'importar_csv':
             arquivo = request.FILES.get('arquivo_csv')
             if arquivo:
@@ -462,11 +512,14 @@ def detalhes_carteira(request, id_carteira):
                     primeira_linha = io_string.readline()
                     delimiter = ';' if ';' in primeira_linha else ','
                     io_string.seek(0)
+                    
                     reader = csv.reader(io_string, delimiter=delimiter)
                     header, col_map, contagem = [], {}, 0
+                    
                     for row in reader:
                         row_clean = [str(c).strip() for c in row if c]
                         if not row_clean: continue
+                        
                         if not header:
                             row_lower = [c.lower() for c in row_clean]
                             header = row_lower
@@ -477,21 +530,33 @@ def detalhes_carteira(request, id_carteira):
                                 elif 'bairro' in col: col_map['bairro'] = i
                                 elif 'telefone' in col: col_map['telefone'] = i
                             continue
+
                         if header and 'nome' in col_map:
                             try:
                                 raw_nome = row_clean[col_map['nome']]
                                 if not raw_nome or raw_nome.isdigit(): continue
+                                
                                 end = row_clean[col_map.get('endereco', 0)] if 'endereco' in col_map else ""
                                 num = row_clean[col_map.get('numero', 0)] if 'numero' in col_map else ""
                                 bairro = row_clean[col_map.get('bairro', 0)] if 'bairro' in col_map else "Bairro não informado"
                                 tel = row_clean[col_map.get('telefone', 0)] if 'telefone' in col_map else ""
-                                cli_obj, _ = Cliente.objects.get_or_create(nome=raw_nome[:100], defaults={'endereco': f"{end}, {num}".strip(' ,-'), 'bairro': bairro[:50], 'telefone': tel.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20]})
+                                
+                                cli_obj, _ = Cliente.objects.get_or_create(
+                                    nome=raw_nome[:100],
+                                    defaults={
+                                        'endereco': f"{end}, {num}".strip(' ,-'),
+                                        'bairro': bairro[:50],
+                                        'telefone': tel.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20]
+                                    }
+                                )
                                 cli_obj.carteiras.add(carteira)
                                 contagem += 1
                             except Exception: continue
-                    messages.success(request, f"Sucesso! {contagem} clientes incorporados nesta carteira.")
-                except Exception as e: messages.error(request, f"Erro na leitura: {str(e)}")
-        carteira.save()
+                            
+                    messages.success(request, f"Sucesso! {contagem} clientes incorporados.")
+                except Exception as e:
+                    messages.error(request, f"Erro na leitura: {str(e)}")
+                    
         return redirect('detalhes_carteira', id_carteira=id_carteira)
 
     context = {
