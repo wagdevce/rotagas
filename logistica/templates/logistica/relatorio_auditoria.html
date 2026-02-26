@@ -4,9 +4,9 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="fw-bold mb-0 text-dark text-uppercase">
-            <i class="fas fa-user-shield me-2" style="color: var(--sgb-orange);"></i> Auditoria de Produtividade
+            <i class="fas fa-user-shield me-2" style="color: var(--sgb-orange);"></i> Auditoria de Operação
         </h4>
-        <small class="text-muted">Monitoramento de cliques e timestamps para evitar fraudes.</small>
+        <small class="text-muted">Clique em qualquer registro para ver detalhes e localização GPS.</small>
     </div>
     
     <div class="bg-white p-2 rounded shadow-sm border d-flex align-items-center">
@@ -18,117 +18,173 @@
 </div>
 
 <div class="row g-4">
-    <!-- RANKING DE PERFORMANCE DO DIA -->
-    <div class="col-md-4">
+    <!-- COLUNA 1: LOG DE CLIQUES CALL CENTER -->
+    <div class="col-md-5">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white border-bottom pt-3">
-                <h6 class="fw-bold text-uppercase small mb-0">Ranking Comercial</h6>
+                <h6 class="fw-bold text-uppercase small mb-0">Call Center (Linha do Tempo)</h6>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr style="font-size: 0.7rem;">
-                                <th>AGENTE</th>
-                                <th class="text-center">LIGS</th>
-                                <th class="text-center text-success">VENDAS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for r in ranking_comercial %}
-                            <tr>
-                                <td class="fw-bold">{{ r.agente__username }}</td>
-                                <td class="text-center">{{ r.total }}</td>
-                                <td class="text-center fw-bold text-success">{{ r.vendas }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="3" class="text-center py-4 text-muted">Sem dados</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- TIMELINE DE AUDITORIA (O "DEDO DURO") -->
-    <div class="col-md-8">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center pt-3">
-                <h6 class="fw-bold text-uppercase small mb-0">Linha do Tempo (Log de Cliques)</h6>
-                <span class="badge bg-dark">{{ ligacoes.count }} Atividades</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                    <table class="table table-sm align-middle mb-0">
+                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+                    <table class="table table-hover align-middle mb-0">
                         <thead class="table-light sticky-top">
                             <tr style="font-size: 0.7rem;">
                                 <th class="ps-3">HORA</th>
                                 <th>AGENTE</th>
                                 <th>CLIENTE</th>
                                 <th>RESULTADO</th>
-                                <th class="pe-3">OBS</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for lig in ligacoes %}
-                            <tr class="{% if lig.resultado == 'VENDA_FECHADA' %}table-success{% endif %}">
+                            <tr style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#modalLigacao{{ lig.id }}">
                                 <td class="ps-3 font-monospace small">{{ lig.data_ligacao|date:"H:i:s" }}</td>
                                 <td class="fw-bold small">{{ lig.agente.username }}</td>
-                                <td class="small">{{ lig.cliente.nome|truncatechars:20 }}</td>
+                                <td class="small">{{ lig.cliente.nome|truncatechars:15 }}</td>
                                 <td>
                                     {% if lig.resultado == 'VENDA_FECHADA' %}
                                         <span class="badge bg-success">VENDA</span>
-                                    {% elif lig.resultado == 'RECUSA' %}
-                                        <span class="badge bg-danger">RECUSA</span>
                                     {% else %}
-                                        <span class="badge bg-secondary">N/A</span>
+                                        <span class="badge bg-secondary">{{ lig.resultado|truncatechars:6 }}</span>
                                     {% endif %}
                                 </td>
-                                <td class="pe-3 small text-muted">{{ lig.observacao|default:"-" }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="5" class="text-center py-5">Nenhuma ligação registrada hoje.</td></tr>
+                            <tr><td colspan="4" class="text-center py-4">Sem ligações</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </div>
-            <div class="card-footer bg-light p-2 text-center">
-                <small class="text-muted"><i class="fas fa-info-circle me-1"></i> Dica: Se um agente tem várias ligações no mesmo minuto, pode ser fraude de meta.</small>
+        </div>
+    </div>
+
+    <!-- COLUNA 2: AUDITORIA DE RUA (Onde o GPS aparece) -->
+    <div class="col-md-7">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center pt-3">
+                <h6 class="fw-bold text-uppercase small mb-0">Rua (Entregas e GPS)</h6>
+                <span class="badge bg-dark">{{ visitas_rua.count }} Baixas</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr style="font-size: 0.7rem;">
+                                <th class="ps-3">HORA</th>
+                                <th>MOTOQUEIRO</th>
+                                <th>CLIENTE</th>
+                                <th>GPS</th>
+                                <th class="text-end pe-3">VALOR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for v in visitas_rua %}
+                            <tr style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#modalVisita{{ v.id }}">
+                                <td class="ps-3 font-monospace small text-muted">{{ v.data_visita|date:"H:i" }}</td>
+                                <td class="fw-bold small">{{ v.rota.motoqueiro.username }}</td>
+                                <td class="small">{{ v.cliente.nome|truncatechars:20 }}</td>
+                                <td>
+                                    {% if v.latitude_checkin %}
+                                        <span class="text-success"><i class="fas fa-location-dot"></i> OK</span>
+                                    {% else %}
+                                        <span class="text-muted opacity-50"><i class="fas fa-location-crosshairs"></i> N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3 fw-bold {% if v.valor_recebido > 0 %}text-success{% else %}text-muted{% endif %}">
+                                    R$ {{ v.valor_recebido }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- AUDITORIA DE MOTOQUEIROS (OPCIONAL NESTA TELA) -->
-<div class="card border-0 shadow-sm mt-4 mb-5">
-    <div class="card-header bg-white border-bottom pt-3">
-        <h6 class="fw-bold text-uppercase small mb-0">Auditoria de Rua (Entregas Realizadas)</h6>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr style="font-size: 0.7rem;">
-                    <th class="ps-3">HORA BAIXA</th>
-                    <th>MOTOQUEIRO</th>
-                    <th>CLIENTE</th>
-                    <th class="text-end pe-3">VALOR RECEBIDO</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for v in visitas_rua %}
-                <tr>
-                    <td class="ps-3 font-monospace small">{{ v.data_visita|date:"H:i" }}</td>
-                    <td class="fw-bold">{{ v.rota.motoqueiro.username }}</td>
-                    <td>{{ v.cliente.nome }}</td>
-                    <td class="text-end pe-3 fw-bold text-success">R$ {{ v.valor_recebido }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="4" class="text-center py-4">Nenhuma baixa de rua hoje.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<!-- ==========================================
+     MODAIS DE DETALHES (GERADOS DINAMICAMENTE)
+=========================================== -->
+
+<!-- Modais das Visitas de Rua -->
+{% for v in visitas_rua %}
+<div class="modal fade" id="modalVisita{{ v.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold text-uppercase small"><i class="fas fa-info-circle me-2"></i> Detalhes da Entrega #{{ v.id }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="text-center mb-4">
+                    <h4 class="fw-bold mb-0 text-dark">{{ v.cliente.nome }}</h4>
+                    <p class="text-muted small"><i class="fas fa-map-marker-alt text-danger"></i> {{ v.cliente.endereco }}</p>
+                </div>
+                
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="small fw-bold text-muted text-uppercase">Motoqueiro</label>
+                        <p class="fw-bold text-dark">{{ v.rota.motoqueiro.username }}</p>
+                    </div>
+                    <div class="col-6 text-end">
+                        <label class="small fw-bold text-muted text-uppercase">Horário da Baixa</label>
+                        <p class="fw-bold text-dark">{{ v.data_visita|date:"d/m/Y H:i" }}</p>
+                    </div>
+                    
+                    <div class="col-12 bg-light p-3 rounded border border-dashed">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <label class="small fw-bold text-muted text-uppercase">Status da Visita</label>
+                                <h5 class="fw-bold {% if v.status == 'REALIZADA' %}text-success{% else %}text-danger{% endif %} mb-0">
+                                    {{ v.get_status_display }}
+                                </h5>
+                            </div>
+                            <div class="text-end">
+                                <label class="small fw-bold text-muted text-uppercase">Valor Arrecadado</label>
+                                <h5 class="fw-bold text-dark mb-0">R$ {{ v.valor_recebido }}</h5>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if v.observacao %}
+                    <div class="col-12">
+                        <label class="small fw-bold text-muted text-uppercase">Observações do Campo</label>
+                        <p class="small bg-warning bg-opacity-10 p-2 rounded">{{ v.observacao }}</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- VERIFICAÇÃO DE GPS -->
+                    <div class="col-12 mt-4">
+                        <h6 class="fw-bold text-uppercase small text-muted"><i class="fas fa-street-view me-2"></i> Auditoria de Localização</h6>
+                        {% if v.latitude_checkin %}
+                            <div class="alert alert-success border-0 small d-flex align-items-center">
+                                <i class="fas fa-check-circle fa-2x me-3"></i>
+                                <div>
+                                    Localização capturada com sucesso! O motoqueiro estava nas coordenadas: 
+                                    <br><strong>{{ v.latitude_checkin }}, {{ v.longitude_checkin }}</strong>
+                                </div>
+                            </div>
+                            <a href="https://www.google.com/maps?q={{ v.latitude_checkin }},{{ v.longitude_checkin }}" target="_blank" class="btn btn-dark w-100 fw-bold py-2 shadow-sm">
+                                <i class="fas fa-map-marked-alt me-2 text-warning"></i> VER NO GOOGLE MAPS
+                            </a>
+                        {% else %}
+                            <div class="alert alert-warning border-0 small d-flex align-items-center">
+                                <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+                                <div>Nenhuma coordenada capturada. Pode ter ocorrido falta de permissão ou erro no sinal de GPS do telemóvel.</div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+{% endfor %}
+
+<style>
+    .table-hover tbody tr:hover { background-color: rgba(242, 101, 34, 0.05); transition: 0.2s; }
+    .border-dashed { border-style: dashed !important; }
+</style>
 {% endblock %}

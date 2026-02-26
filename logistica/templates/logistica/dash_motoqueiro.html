@@ -159,7 +159,7 @@
                 </div>
             </div>
 
-            <!-- Ações Secundárias (Navegação e Contacto) -->
+            <!-- Ações Secundárias (Navegação e Apoio da Central) -->
             <div class="row g-2 mb-3">
                 <div class="col-6">
                     <!-- Abre o Google Maps com o endereço do cliente -->
@@ -170,19 +170,12 @@
                     </a>
                 </div>
                 <div class="col-6">
-                    <!-- Abre o WhatsApp -->
-                    {% if visita.cliente.telefone %}
-                    <a href="https://wa.me/55{{ visita.cliente.telefone }}?text=Olá%20{{ visita.cliente.nome|urlencode }},%20o%20entregador%20da%20Rotagas%20está%20a%20caminho!" 
+                    <!-- CANAL DIRETO COM A CENTRAL COMERCIAL -->
+                    <a href="https://wa.me/558589751035?text=Olá%20Central,%20preciso%20de%20apoio%20na%20entrega%20do%20cliente%20*{{ visita.cliente.nome|urlencode }}*.%20Tive%20um%20problema!" 
                        target="_blank" class="btn btn-quick zap-btn w-100 text-decoration-none">
                         <i class="fab fa-whatsapp"></i>
-                        Avisar Zap
+                        Apoio Central
                     </a>
-                    {% else %}
-                    <button class="btn btn-quick w-100 opacity-50" disabled>
-                        <i class="fas fa-phone-slash"></i>
-                        Sem Número
-                    </button>
-                    {% endif %}
                 </div>
             </div>
 

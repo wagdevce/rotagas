@@ -8,10 +8,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
-from django.db import transaction, connection
+from django.db import transaction
 from django.contrib import messages
-from django.core.management import call_command
-from django.contrib.auth import login
 
 # Importações dos Models locais
 from .models import Visita, Cliente, Rota, Carteira, Ligacao
@@ -21,44 +19,40 @@ STATUS_PENDENTE = 'PENDENTE'
 STATUS_REALIZADA = 'REALIZADA'
 STATUS_NAO_VENDA = 'NAO_VENDA'
 
-# --- UTILITÁRIOS ---
+# ==============================================================================
+# FUNÇÕES UTILITÁRIAS E INTELIGÊNCIA
+# ==============================================================================
+
 def converter_valor(valor_str):
     """Converte strings monetárias (ex: 150,00) para Decimal de forma segura."""
     if not valor_str: return Decimal('0.00')
     try:
-        # Limpa pontos de milhar e troca vírgula por ponto decimal
         valor_limpo = str(valor_str).replace('.', '').replace(',', '.')
         return Decimal(valor_limpo)
     except (InvalidOperation, ValueError):
         return Decimal('0.00')
 
-# ==============================================================================
-# FUNÇÃO DE EMERGÊNCIA: CRIAR TABELAS E FORÇAR LOGIN
-# ==============================================================================
-
-def setup_inicial_nuvem(request):
+def atualizar_inteligencia_consumo(cliente):
     """
-    Versão "Zero Terminal": Cria as tabelas da base de dados,
-    cria o utilizador Wagner e faz o login automático.
+    Calcula a média de dias entre as últimas compras (CMC) 
+    para prever a próxima data de fim de gás.
     """
-    try:
-        call_command('migrate', interactive=False)
+    historico = Visita.objects.filter(
+        cliente=cliente, 
+        status=STATUS_REALIZADA
+    ).order_by('-data_visita')[:3]
 
-        # Garante que o utilizador Wagner existe e é superuser
-        wagner, _ = User.objects.get_or_create(username__iexact='wagner', defaults={'username': 'Wagner'})
-        wagner.set_password('admin123') 
-        wagner.is_staff = True
-        wagner.is_superuser = True
-        wagner.save()
-
-        # Faz o login automático
-        login(request, wagner)
-        return redirect('/admin/')
-
-    except Exception as e:
-        return render(request, 'logistica/base.html', {
-            'messages': [{'tags': 'danger', 'text': f"❌ Erro Crítico: {str(e)}"}]
-        })
+    if len(historico) >= 2:
+        intervalos = []
+        for i in range(len(historico) - 1):
+            delta = (historico[i].data_visita.date() - historico[i+1].data_visita.date()).days
+            if delta > 0: intervalos.append(delta)
+        
+        if intervalos:
+            cliente.ciclo_consumo_dias = sum(intervalos) / len(intervalos)
+    
+    cliente.data_ultima_venda = timezone.now().date()
+    cliente.save()
 
 # ==============================================================================
 # MÓDULO DE ACESSO E TRÁFEGO
@@ -66,13 +60,16 @@ def setup_inicial_nuvem(request):
 
 @login_required
 def home(request):
-    """Encaminha o utilizador conforme o seu cargo."""
+    """Controlador de Tráfego: Redireciona o utilizador conforme o seu perfil."""
+    # 1. Gerentes/Staff -> Dashboard
     if request.user.is_staff: 
         return redirect('dashboard')
     
+    # 2. Agentes Comerciais (Estagiários) -> Cockpit de Ligações
     if request.user.groups.filter(name='Agentes Comerciais').exists() or Carteira.objects.filter(agente_comercial=request.user).exists():
         return redirect('dash_comercial')
 
+    # 3. Motoqueiros -> Lista de entregas do dia e Resumo
     hoje = timezone.now().date()
     visitas_pendentes = Visita.objects.select_related('cliente').filter(
         rota__motoqueiro=request.user,
@@ -80,7 +77,22 @@ def home(request):
         status=STATUS_PENDENTE
     ).order_by('cliente__bairro', 'cliente__nome')
     
-    return render(request, 'logistica/dash_motoqueiro.html', {'visitas': visitas_pendentes})
+    visitas_finalizadas = Visita.objects.select_related('cliente').filter(
+        rota__motoqueiro=request.user,
+        rota__data_criacao__date=hoje,
+    ).exclude(status=STATUS_PENDENTE).order_by('-data_visita')
+
+    resumo_dia = visitas_finalizadas.aggregate(
+        total_recebido=Sum('valor_recebido'),
+        qtd_sucesso=Count('id', filter=Q(status=STATUS_REALIZADA)),
+        qtd_falha=Count('id', filter=Q(status=STATUS_NAO_VENDA))
+    )
+    
+    return render(request, 'logistica/dash_motoqueiro.html', {
+        'visitas': visitas_pendentes,
+        'visitas_finalizadas': visitas_finalizadas,
+        'resumo_dia': resumo_dia
+    })
 
 # ==============================================================================
 # MÓDULO OPERACIONAL (MOTOQUEIRO)
@@ -89,6 +101,7 @@ def home(request):
 @login_required
 @transaction.atomic
 def registrar_visita(request, id_visita):
+    """Ecrã de baixa de entrega com Blindagem GPS."""
     visita = get_object_or_404(Visita.objects.select_related('cliente', 'rota'), pk=id_visita)
     
     if visita.rota.motoqueiro != request.user and not request.user.is_staff: 
@@ -97,20 +110,31 @@ def registrar_visita(request, id_visita):
     if request.method == 'POST':
         resultado_venda = request.POST.get('resultado_venda')
         
+        # --- CAPTURA DE GPS (Blindagem Operacional) ---
+        try:
+            visita.latitude_checkin = float(request.POST.get('lat'))
+            visita.longitude_checkin = float(request.POST.get('lng'))
+        except (TypeError, ValueError):
+            pass # Mantém nulo caso o GPS tenha falhado
+
         if resultado_venda == 'SIM':
             valor = converter_valor(request.POST.get('valor_recebido'))
             visita.status = STATUS_REALIZADA
             visita.valor_recebido = valor
             visita.cliente.divida_atual -= valor
             visita.cliente.save()
-            messages.success(request, f"Venda de R$ {valor} registada para {visita.cliente.nome}.")
+            
+            # Atualiza o robô de previsão de compras
+            atualizar_inteligencia_consumo(visita.cliente)
+            
+            messages.success(request, f"Venda de R$ {valor} registada com sucesso.")
         else:
             visita.status = STATUS_NAO_VENDA
             visita.motivo_nao_venda = request.POST.get('motivo_nao_venda')
             visita.concorrente_empresa = request.POST.get('concorrente_empresa')
             visita.concorrente_preco = converter_valor(request.POST.get('concorrente_preco'))
             visita.observacao = request.POST.get('observacao')
-            messages.info(request, "Visita finalizada sem venda.")
+            messages.info(request, "Visita finalizada como Não Venda.")
 
         visita.save()
         return redirect('home')
@@ -118,11 +142,12 @@ def registrar_visita(request, id_visita):
     return render(request, 'logistica/registrar_visita.html', {'visita': visita})
 
 # ==============================================================================
-# MÓDULO COMERCIAL (ESTAGIÁRIO)
+# MÓDULO COMERCIAL (ESTAGIÁRIO / CALL CENTER)
 # ==============================================================================
 
 @login_required
 def dash_comercial(request):
+    """Cockpit de Alta Produtividade para o Agente Comercial."""
     carteiras = Carteira.objects.filter(agente_comercial=request.user)
     hoje = timezone.now().date()
     
@@ -131,6 +156,7 @@ def dash_comercial(request):
         data_ligacao__date=hoje
     ).values_list('cliente_id', flat=True)
 
+    # Exibe clientes ordenados pelos que mais devem
     clientes = Cliente.objects.filter(
         carteiras__in=carteiras
     ).exclude(
@@ -154,14 +180,31 @@ def dash_comercial(request):
 @login_required
 @transaction.atomic
 def registrar_ligacao(request, cliente_id):
+    """Processa o clique rápido de prospecção."""
     if request.method == 'POST':
         cliente = get_object_or_404(Cliente, pk=cliente_id)
         resultado = request.POST.get('resultado')
         obs = request.POST.get('observacao', '')
 
-        Ligacao.objects.create(agente=request.user, cliente=cliente, resultado=resultado, observacao=obs)
+        # Se houver data de reagendamento enviada (Follow-up)
+        data_retorno_str = request.POST.get('data_agendamento')
+        data_retorno = None
+        if data_retorno_str:
+            try:
+                data_retorno = datetime.datetime.strptime(data_retorno_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        Ligacao.objects.create(
+            agente=request.user, 
+            cliente=cliente, 
+            resultado=resultado, 
+            observacao=obs,
+            data_retorno=data_retorno
+        )
 
         if resultado == 'VENDA_FECHADA':
+            # Mágica de Automação: Envia a rota para o motoqueiro
             carteira = cliente.carteiras.first()
             motoqueiro = carteira.motoqueiro if carteira else None
             
@@ -176,13 +219,13 @@ def registrar_ligacao(request, cliente_id):
                     rota=rota, 
                     cliente=cliente, 
                     status=STATUS_PENDENTE,
-                    observacao=f"Venda Telemarketing (Por: {request.user.username}) {obs}"
+                    observacao=f"Venda Telemarketing ({request.user.username}): {obs}"
                 )
-                messages.success(request, f"Venda fechada! {motoqueiro.username} recebeu a entrega.")
+                messages.success(request, f"Venda fechada! {motoqueiro.username} recebeu a entrega no app.")
             else:
-                messages.warning(request, "Venda registada, mas cliente sem motoqueiro atribuído.")
+                messages.warning(request, "Venda registada, mas cliente sem motoqueiro atribuído na carteira.")
         else:
-            messages.info(request, f"Contacto registado: {resultado}")
+            messages.info(request, f"Contacto registado: {resultado.replace('_', ' ')}")
 
     return redirect('dash_comercial')
 
@@ -192,6 +235,7 @@ def registrar_ligacao(request, cliente_id):
 
 @login_required
 def dashboard(request):
+    """Painel de Receitas e Desempenho (Apenas Staff)."""
     if not request.user.is_staff: return redirect('home')
     
     data_url = request.GET.get('data')
@@ -213,6 +257,13 @@ def dashboard(request):
     historico = visitas_hoje.select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
     qtd_ligacoes = Ligacao.objects.filter(data_ligacao__date=data_filtro).count()
 
+    # Base Inativa para KPIs
+    hoje = timezone.now().date()
+    limite_inativo = hoje - datetime.timedelta(days=15)
+    qtd_inativos = Cliente.objects.filter(
+        Q(data_ultima_venda__lt=limite_inativo) | Q(data_ultima_venda__isnull=True)
+    ).count()
+
     return render(request, 'logistica/dashboard.html', {
         'total_dinheiro': resumo['total_recebido'] or 0,
         'pendentes': resumo['pendentes'],
@@ -222,25 +273,29 @@ def dashboard(request):
         'motivo_concorrencia': resumo['concorrencia'],
         'motivo_estoque': resumo['estoque'],
         'qtd_ligacoes': qtd_ligacoes,
+        'qtd_inativos': qtd_inativos,
         'historico': historico,
         'data_atual': data_filtro,
     })
 
 @login_required
 def relatorio_auditoria(request):
+    """O 'Dedo Duro' - Linha do tempo exata das ações da equipa com lupa GPS."""
     if not request.user.is_staff: return redirect('home')
     
     data_str = request.GET.get('data')
     data_obj = datetime.datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else timezone.now().date()
     
-    ligacoes = Ligacao.objects.filter(data_ligacao__date=data_obj).select_related('agente', 'cliente').order_by('data_ligacao')
+    ligacoes = Ligacao.objects.filter(data_ligacao__date=data_obj).select_related('agente', 'cliente').order_by('-data_ligacao')
     
     ranking = Ligacao.objects.filter(data_ligacao__date=data_obj).values('agente__username').annotate(
         total=Count('id'),
         vendas=Count('id', filter=Q(resultado='VENDA_FECHADA'))
     ).order_by('-total')
 
-    visitas_rua = Visita.objects.filter(data_visita__date=data_obj, status__in=[STATUS_REALIZADA, STATUS_NAO_VENDA]).select_related('cliente', 'rota__motoqueiro').order_by('data_visita')
+    visitas_rua = Visita.objects.filter(
+        data_visita__date=data_obj
+    ).exclude(status=STATUS_PENDENTE).select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
 
     return render(request, 'logistica/relatorio_auditoria.html', {
         'data_selecionada': data_obj,
@@ -256,16 +311,12 @@ def relatorio_auditoria(request):
 @login_required
 @transaction.atomic
 def distribuir_rotas(request):
-    """
-    Controla a Mesa de Planeamento. 
-    Lida com a criação de rotas para motoqueiros E com a importação de CSV geral.
-    """
     if not request.user.is_staff: return redirect('home')
     
     if request.method == 'POST':
         acao = request.POST.get('acao')
         
-        # --- NOVO: IMPORTAÇÃO MASSIVA NA MESA DE PLANEAMENTO ---
+        # --- IMPORTAÇÃO MASSIVA GLOBAL ---
         if acao == 'importar_csv':
             arquivo = request.FILES.get('arquivo_csv')
             if arquivo:
@@ -304,7 +355,6 @@ def distribuir_rotas(request):
                                 bairro = row_clean[col_map.get('bairro', 0)] if 'bairro' in col_map else "Bairro não informado"
                                 tel = row_clean[col_map.get('telefone', 0)] if 'telefone' in col_map else ""
                                 
-                                # Cria ou atualiza o cliente na base geral
                                 Cliente.objects.get_or_create(
                                     nome=raw_nome[:100],
                                     defaults={
@@ -315,23 +365,22 @@ def distribuir_rotas(request):
                                 )
                                 contagem += 1
                             except Exception: continue
-                    messages.success(request, f"Sucesso! {contagem} novos clientes adicionados à base.")
+                    messages.success(request, f"Sucesso! {contagem} novos clientes adicionados à base geral.")
                 except Exception as e:
                     messages.error(request, f"Erro na leitura: {str(e)}")
             return redirect('distribuir_rotas')
 
-        # --- AÇÃO ORIGINAL: DESPACHAR ROTAS ---
+        # --- DISTRIBUIÇÃO MANUAL DE ROTAS ---
         else:
             motoqueiro_id = request.POST.get('motoqueiro_id')
             c_ids = request.POST.getlist('clientes_ids')
             if motoqueiro_id and c_ids:
                 motoqueiro = get_object_or_404(User, id=motoqueiro_id)
                 rota = Rota.objects.create(nome=f"Rota {timezone.now().strftime('%d/%m')}", motoqueiro=motoqueiro)
-                Visita.objects.bulk_create([Visita(rota=rota, cliente_id=cid) for cid in c_ids])
+                Visita.objects.bulk_create([Visita(rota=rota, cliente_id=int(cid)) for cid in c_ids])
                 messages.success(request, f"Rota enviada para {motoqueiro.username}.")
                 return redirect('distribuir_rotas')
 
-    # Lógica de Visualização (GET)
     bairro = request.GET.get('bairro')
     carteira_id = request.GET.get('carteira')
     status_filter = request.GET.get('status')
@@ -340,6 +389,7 @@ def distribuir_rotas(request):
     if bairro: clientes = clientes.filter(bairro=bairro)
     if carteira_id: clientes = clientes.filter(carteiras__id=carteira_id)
     
+    # Filtros calculados dinamicamente (Inteligência)
     if status_filter == 'VIRADOS': 
         clientes = [c for c in clientes if c.is_virado]
     elif status_filter == 'ATRASADOS': 
@@ -368,7 +418,7 @@ def cadastrar_cliente(request):
         if nome:
             Cliente.objects.create(
                 nome=nome,
-                telefone=request.POST.get('telefone', '').replace(' ', '').replace('-', '')[:20],
+                telefone=request.POST.get('telefone', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20],
                 endereco=request.POST.get('endereco', ''),
                 bairro=request.POST.get('bairro', 'Não Informado')
             )
@@ -439,7 +489,7 @@ def detalhes_carteira(request, id_carteira):
                                 cli_obj.carteiras.add(carteira)
                                 contagem += 1
                             except Exception: continue
-                    messages.success(request, f"Sucesso! {contagem} clientes incorporados.")
+                    messages.success(request, f"Sucesso! {contagem} clientes incorporados nesta carteira.")
                 except Exception as e: messages.error(request, f"Erro na leitura: {str(e)}")
         carteira.save()
         return redirect('detalhes_carteira', id_carteira=id_carteira)

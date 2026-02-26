@@ -5,22 +5,24 @@ import dj_database_url
 # Caminho base do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# --- SEGURANÇA ---
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-sua-chave-secreta-aqui')
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+# ==============================================================================
+# SEGURANÇA E AMBIENTE
+# ==============================================================================
+# SECRET_KEY: Usa a da nuvem ou uma padrão para o seu PC
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-chave-secreta-padrao-local')
 
-ALLOWED_HOSTS = [
-    'web-production-1bc34.up.railway.app', 
-    '.railway.app', 
-    '127.0.0.1', 
-    'localhost'
-]
+# DEBUG: Fica True no seu PC e False na Nuvem (se você definir a variável lá)
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://web-production-1bc34.up.railway.app'
-]
+# ALLOWED_HOSTS: Aceita o seu PC, rede local e o domínio da Railway
+ALLOWED_HOSTS = ['*']
 
-# --- DEFINIÇÃO DAS APPS ---
+# CSRF: Essencial para formulários de Login funcionarem na Railway sem dar Erro 403
+CSRF_TRUSTED_ORIGINS = ['https://*.railway.app']
+
+# ==============================================================================
+# APLICAÇÕES INSTALADAS
+# ==============================================================================
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -28,12 +30,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # A nossa aplicação principal
     'logistica',
 ]
 
+# ==============================================================================
+# MIDDLEWARES (O "Filtro" de cada requisição)
+# ==============================================================================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', # <--- WhiteNoise gere o CSS na nuvem
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -63,21 +69,21 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core_rotas.wsgi.application'
 
 # ==============================================================================
-# CONFIGURAÇÃO DE BASE DE DADOS (FORÇAR NUVEM EM PRODUÇÃO)
+# BASE DE DADOS (LÓGICA HÍBRIDA)
 # ==============================================================================
-
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# Se estamos na nuvem (DEBUG = False), EXIGIMOS o PostgreSQL da Railway
-if not DEBUG:
-    if not DATABASE_URL:
-        raise ValueError("ERRO GRAVE: DATABASE_URL não foi encontrada na Railway!")
-    
+if DATABASE_URL:
+    # Se encontrou a URL (Railway), liga-se ao PostgreSQL profissional
     DATABASES = {
-        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
 else:
-    # Se estamos no seu PC (DEBUG = True), usamos o ficheiro SQLite local
+    # Se não encontrou (Seu PC), usa o ficheiro SQLite local
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -85,20 +91,37 @@ else:
         }
     }
 
+# ==============================================================================
+# VALIDAÇÃO DE SENHAS
+# ==============================================================================
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',},
+]
 
-# --- FICHEIROS ESTÁTICOS (WhiteNoise) ---
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-# Usamos a versão SEM Manifest para evitar que quebre por ficheiros em falta
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
-
-# --- CONFIGURAÇÕES DE ACESSO ---
-LOGIN_REDIRECT_URL = 'home'
-LOGOUT_REDIRECT_URL = 'login'
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Internacionalização
+# ==============================================================================
+# INTERNACIONALIZAÇÃO (Idioma e Fuso Horário)
+# ==============================================================================
 LANGUAGE_CODE = 'pt-br'
-TIME_ZONE = 'America/Fortaleza'
+TIME_ZONE = 'America/Fortaleza' # Ajustado para o seu fuso horário
 USE_I18N = True
 USE_TZ = True
+
+# ==============================================================================
+# FICHEIROS ESTÁTICOS (CSS, JS, Imagens)
+# ==============================================================================
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Versão tolerante do WhiteNoise: Se faltar um ícone minúsculo, não deita o site abaixo
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==============================================================================
+# REDIRECIONAMENTOS DE LOGIN
+# ==============================================================================
+LOGIN_REDIRECT_URL = 'home'
+LOGOUT_REDIRECT_URL = 'login'

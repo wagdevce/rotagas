@@ -15,14 +15,14 @@
         <small class="text-muted">Visão Estratégica e Inteligência de Mercado</small>
     </div>
     
-    <div class="d-flex align-items-center bg-white p-2 rounded shadow-sm border" style="min-width: 250px;">
-        <label class="me-2 text-muted small fw-bold mb-0 text-uppercase ps-2"><i class="far fa-calendar-alt me-1"></i> Data:</label>
-        <form method="get" class="m-0 flex-grow-1">
-            <input type="date" name="data" 
-                   value="{{ data_atual|date:'Y-m-d' }}" 
-                   class="form-control form-control-sm border-0 bg-transparent fw-bold text-dark w-100" 
-                   style="outline: none; box-shadow: none; cursor: pointer;"
-                   onchange="this.form.submit()">
+    <!-- NOVO SELETOR DE PERÍODO -->
+    <div class="d-flex align-items-center bg-white p-2 rounded shadow-sm border">
+        <label class="me-2 text-muted small fw-bold mb-0 text-uppercase ps-2"><i class="far fa-calendar-alt me-1"></i> Período:</label>
+        <form method="get" class="m-0 flex-grow-1 d-flex align-items-center gap-2">
+            <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" class="form-control form-control-sm border-0 bg-transparent fw-bold text-dark w-100 px-1" style="outline: none; box-shadow: none; cursor: pointer;">
+            <span class="text-muted small fw-bold">até</span>
+            <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-control form-control-sm border-0 bg-transparent fw-bold text-dark w-100 px-1" style="outline: none; box-shadow: none; cursor: pointer;">
+            <button type="submit" class="btn btn-sm btn-dark"><i class="fas fa-search"></i></button>
         </form>
     </div>
 </div>
@@ -36,7 +36,7 @@
         <i class="fas fa-coins position-absolute" style="font-size: 160px; opacity: 0.08; right: 10%; top: -20px; transform: rotate(-15deg);"></i>
         
         <p class="small text-uppercase fw-bold mb-2" style="letter-spacing: 1.5px; opacity: 0.9;">
-            Faturamento Consolidado • {{ data_atual|date:"d/m/Y" }}
+            Faturamento Consolidado • {{ data_inicio|date:"d/m/Y" }} a {{ data_fim|date:"d/m/Y" }}
         </p>
         <h1 class="display-3 fw-bold mb-3" style="letter-spacing: -1.5px;">
             R$ {{ total_dinheiro|default:"0.00"|floatformat:2 }}
@@ -179,7 +179,7 @@
         {% empty %}
         <div class="p-5 text-center text-muted">
             <i class="fas fa-clipboard-check fa-3x mb-3 opacity-25"></i>
-            <p class="mb-0 fw-bold">Nenhuma movimentação registada para {{ data_atual|date:"d/m/Y" }}.</p>
+            <p class="mb-0 fw-bold">Nenhuma movimentação registada de {{ data_inicio|date:"d/m/Y" }} a {{ data_fim|date:"d/m/Y" }}.</p>
         </div>
         {% endfor %}
     </div>
