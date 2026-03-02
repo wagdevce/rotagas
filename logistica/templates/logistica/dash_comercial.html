@@ -1,65 +1,95 @@
 {% extends 'logistica/base.html' %}
 
 {% block content %}
+<!-- ESTILOS DAS ABAS SGB -->
+<style>
+    .nav-pills .nav-link {
+        color: var(--sgb-black);
+        background-color: white;
+        transition: all 0.3s ease;
+    }
+    .nav-pills .nav-link:hover:not(.active) {
+        background-color: #f8f9fa;
+        transform: translateY(-2px);
+    }
+    .nav-pills .nav-link.active {
+        background-color: var(--sgb-orange) !important;
+        color: white !important;
+        border-color: var(--sgb-orange) !important;
+        box-shadow: 0 4px 10px rgba(242, 101, 34, 0.3) !important;
+    }
+    .table-hover tbody tr:hover {
+        background-color: rgba(242, 101, 34, 0.03);
+        transition: background-color 0.2s ease;
+    }
+</style>
+
 <!-- CABEÇALHO E MÉTRICAS -->
 <div class="row mb-4">
     <div class="col-12">
-        <h4 class="fw-bold mb-0 text-dark text-uppercase"><i class="fas fa-headset me-2 text-primary"></i> Cockpit de Vendas</h4>
+        <h4 class="fw-bold mb-0 text-dark text-uppercase">
+            <i class="fas fa-headset me-2" style="color: var(--sgb-orange);"></i> Cockpit de Vendas
+        </h4>
         <p class="text-muted">Prospeção ativa e recuperação de clientes.</p>
     </div>
 </div>
 
+<!-- ==========================================
+     MÉTRICAS DO DIA (KPIs)
+=========================================== -->
 <div class="row g-3 mb-4">
-    <!-- Meta Diária -->
+    <!-- Meta Diária (Preto SGB) -->
     <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100 bg-dark text-white">
+        <div class="card border-0 shadow-sm h-100" style="background-color: var(--sgb-black); color: white;">
             <div class="card-body text-center py-3">
-                <i class="fas fa-bullseye fa-2x mb-2 text-warning"></i>
-                <h3 class="fw-bold mb-0">{{ metricas.total_feitas }} <span class="fs-6 text-muted">/ {{ metricas.meta_diaria }}</span></h3>
-                <small class="text-uppercase" style="font-size: 0.7rem;">Ligações Feitas</small>
+                <i class="fas fa-bullseye fa-2x mb-2" style="color: var(--sgb-orange);"></i>
+                <h3 class="fw-bold mb-0">{{ metricas.total_feitas }} <span class="fs-6 opacity-50">/ {{ metricas.meta_diaria }}</span></h3>
+                <small class="text-uppercase fw-bold" style="font-size: 0.7rem; letter-spacing: 1px;">Ligações Feitas</small>
             </div>
         </div>
     </div>
     
-    <!-- Vendas -->
+    <!-- Vendas Fechadas -->
     <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100 border-bottom border-success border-3">
+        <div class="card border-0 shadow-sm h-100" style="border-bottom: 4px solid #198754 !important;">
             <div class="card-body text-center py-3">
                 <i class="fas fa-check-circle fa-2x mb-2 text-success opacity-75"></i>
                 <h3 class="fw-bold mb-0 text-dark">{{ metricas.vendas_fechadas }}</h3>
-                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Vendas Fechadas</small>
+                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem; letter-spacing: 1px;">Vendas Sucesso</small>
             </div>
         </div>
     </div>
     
     <!-- Recusas -->
     <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100 border-bottom border-danger border-3">
+        <div class="card border-0 shadow-sm h-100" style="border-bottom: 4px solid #dc3545 !important;">
             <div class="card-body text-center py-3">
                 <i class="fas fa-times-circle fa-2x mb-2 text-danger opacity-75"></i>
                 <h3 class="fw-bold mb-0 text-dark">{{ metricas.recusas }}</h3>
-                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Recusas / Concorrência</small>
+                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem; letter-spacing: 1px;">Recusas/Concorrência</small>
             </div>
         </div>
     </div>
 
-    <!-- Como funciona -->
+    <!-- Como funciona (Informativo) -->
     <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100 bg-light">
+        <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid var(--sgb-orange) !important;">
             <div class="card-body py-3 d-flex flex-column justify-content-center">
-                <small class="fw-bold text-dark text-uppercase mb-1"><i class="fas fa-info-circle me-1"></i> Auto-Despacho</small>
-                <small class="text-muted" style="font-size: 0.75rem; line-height: 1.2;">Ao clicar em <b>Vendeu</b>, a entrega é enviada instantaneamente para o motoqueiro da carteira.</small>
+                <small class="fw-bold text-dark text-uppercase mb-1"><i class="fas fa-bolt me-1 text-warning"></i> Auto-Despacho</small>
+                <small class="text-muted" style="font-size: 0.75rem; line-height: 1.2;">Ao clicar em <b>Vendeu</b>, a entrega é gerada instantaneamente no telemóvel do motoqueiro.</small>
             </div>
         </div>
     </div>
 </div>
 
-<!-- NAVEGAÇÃO POR ABAS (FILA DE TRABALHO) -->
-<ul class="nav nav-pills mb-3 gap-2" id="pills-tab" role="tablist">
+<!-- ==========================================
+     NAVEGAÇÃO POR ABAS (FILA DE TRABALHO)
+=========================================== -->
+<ul class="nav nav-pills mb-4 gap-2" id="pills-tab" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active fw-bold text-uppercase small px-4 rounded-pill border shadow-sm" id="pills-mailing-tab" data-bs-toggle="pill" data-bs-target="#pills-mailing" type="button" role="tab">
             <i class="fas fa-list me-1"></i> Mailing Principal
-            <span class="badge bg-dark ms-2 rounded-pill">{{ clientes_principais.count }}</span>
+            <span class="badge bg-light text-dark ms-2 rounded-pill">{{ clientes_principais.count }}</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -75,38 +105,49 @@
     </li>
 </ul>
 
-<!-- CONTEÚDO DAS ABAS -->
+<!-- ==========================================
+     CONTEÚDO DAS ABAS
+=========================================== -->
 <div class="tab-content" id="pills-tabContent">
     
     <!-- ABA 1: MAILING PRINCIPAL -->
     <div class="tab-pane fade show active" id="pills-mailing" role="tabpanel">
-        <div class="card border-0 shadow-sm mb-5">
+        <div class="card border-0 shadow-sm mb-5" style="border-top: 4px solid var(--sgb-orange) !important;">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-4 text-uppercase small text-muted py-3">Dados do Cliente</th>
-                            <th class="text-uppercase small text-muted py-3 text-center">Contato</th>
-                            <th class="pe-4 text-uppercase small text-muted py-3 text-end">Ações</th>
+                            <th class="ps-4 text-uppercase small text-muted py-3 border-0">Dados do Cliente</th>
+                            <th class="text-uppercase small text-muted py-3 text-center border-0">Ação Rápida</th>
+                            <th class="pe-4 text-uppercase small text-muted py-3 text-end border-0">Desfecho</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for cliente in clientes_principais %}
                         <tr>
                             <td class="ps-4">
-                                <div class="fw-bold text-dark">{{ cliente.nome }}</div>
-                                <span class="badge bg-light text-secondary border small">{{ cliente.bairro }}</span>
-                                {% if cliente.is_atrasado %}
-                                    <span class="badge bg-warning text-dark border-0 small">Há {{ cliente.dias_desde_ultima_compra }} dias sem comprar</span>
-                                {% endif %}
+                                <div class="fw-bold text-dark fs-6">{{ cliente.nome }}</div>
+                                
+                                <div class="d-flex align-items-center gap-2 mt-1">
+                                    <span class="badge bg-light text-secondary border small">{{ cliente.bairro }}</span>
+                                    
+                                    <!-- Inteligência de Consumo (Tags) -->
+                                    {% if cliente.is_virado %}
+                                        <span class="badge bg-danger text-white border-0 small shadow-sm"><i class="fas fa-skull-crossbones me-1"></i> VIRADO (> {{ cliente.dias_desde_ultima_compra }}d)</span>
+                                    {% elif cliente.is_atrasado %}
+                                        <span class="badge bg-warning text-dark border-0 small shadow-sm"><i class="fas fa-clock me-1"></i> ATRASADO ({{ cliente.dias_desde_ultima_compra }}d)</span>
+                                    {% elif cliente.data_ultima_venda is None %}
+                                        <span class="badge bg-info text-white border-0 small shadow-sm"><i class="fas fa-asterisk me-1"></i> NOVO</span>
+                                    {% endif %}
+                                </div>
                             </td>
                             <td class="text-center">
-                                <div class="d-flex flex-column gap-1">
+                                <div class="d-flex flex-column align-items-center gap-1">
                                     <a href="tel:{{ cliente.telefone }}" class="fw-bold text-dark text-decoration-none">
                                         <i class="fas fa-phone-alt me-1 text-muted"></i> {{ cliente.telefone }}
                                     </a>
-                                    <a href="https://wa.me/55{{ cliente.telefone }}?text=Olá%20{{ cliente.nome|urlencode }},%20vi%20que%20seu%20gás%20pode%20estar%20acabando..." 
-                                       target="_blank" class="btn btn-sm btn-success py-0 px-2 fw-bold" style="font-size: 0.7rem;">
+                                    <a href="https://wa.me/55{{ cliente.telefone }}?text=Olá%20{{ cliente.nome|urlencode }},%20aqui%20é%20da%20Rotagas!%20Vi%20que%20o%20seu%20gás%20deve%20estar%20a%20acabar..." 
+                                       target="_blank" class="btn btn-sm btn-success py-1 px-3 fw-bold shadow-sm" style="font-size: 0.75rem; border-radius: 6px;">
                                         <i class="fab fa-whatsapp me-1"></i> ZAP
                                     </a>
                                 </div>
@@ -116,20 +157,20 @@
                                     <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0">
                                         {% csrf_token %}
                                         <input type="hidden" name="resultado" value="VENDA_FECHADA">
-                                        <button type="submit" class="btn btn-success fw-bold px-3">
+                                        <button type="submit" class="btn btn-success fw-bold px-3 shadow-sm">
                                             <i class="fas fa-check me-1"></i> Vendeu
                                         </button>
                                     </form>
-                                    <button type="button" class="btn btn-outline-danger fw-bold"
+                                    <button type="button" class="btn btn-outline-danger fw-bold shadow-sm"
                                             data-bs-toggle="modal" data-bs-target="#modalRecusaComercial"
                                             data-action="{% url 'registrar_ligacao' cliente.id %}"
                                             data-nome="{{ cliente.nome }}">
-                                        <i class="fas fa-times me-1"></i> Ação
+                                        <i class="fas fa-times"></i> Ação
                                     </button>
                                     <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0">
                                         {% csrf_token %}
                                         <input type="hidden" name="resultado" value="CAIXA_POSTAL">
-                                        <button type="submit" class="btn btn-outline-secondary fw-bold" title="Sem Atender">
+                                        <button type="submit" class="btn btn-outline-secondary fw-bold shadow-sm" title="Sem Atender">
                                             <i class="fas fa-voicemail"></i>
                                         </button>
                                     </form>
@@ -139,9 +180,11 @@
                         {% empty %}
                         <tr>
                             <td colspan="3" class="text-center text-muted py-5">
-                                <i class="fas fa-check-circle fa-3x mb-3 text-success opacity-50"></i>
-                                <h6 class="fw-bold">Mailing Finalizado!</h6>
-                                <p class="small">Todos os clientes da lista principal já foram contatados hoje.</p>
+                                <div class="opacity-50 mb-3">
+                                    <i class="fas fa-check-circle fa-4x text-success"></i>
+                                </div>
+                                <h5 class="fw-bold text-dark">Mailing Finalizado!</h5>
+                                <p class="small mb-0">Todos os clientes desta lista já foram contactados hoje.</p>
                             </td>
                         </tr>
                         {% endfor %}
@@ -153,35 +196,35 @@
 
     <!-- ABA 2: RETORNOS AGENDADOS -->
     <div class="tab-pane fade" id="pills-retornos" role="tabpanel">
-        <div class="card border-0 shadow-sm mb-5 border-danger border-opacity-25" style="border-top: 4px solid #dc3545 !important;">
+        <div class="card border-0 shadow-sm mb-5" style="border-top: 4px solid #dc3545 !important; background-color: #fffafb;">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-4 text-uppercase small text-muted py-3">Cliente em Retorno</th>
-                            <th class="text-uppercase small text-muted py-3 text-center">Contato</th>
-                            <th class="pe-4 text-uppercase small text-muted py-3 text-end">Ações</th>
+                            <th class="ps-4 text-uppercase small text-muted py-3 border-0">Cliente em Retorno</th>
+                            <th class="text-uppercase small text-muted py-3 text-center border-0">Ação Rápida</th>
+                            <th class="pe-4 text-uppercase small text-muted py-3 text-end border-0">Desfecho</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for lig in lista_retornos %}
-                        <tr class="bg-danger bg-opacity-10">
+                        <tr>
                             <td class="ps-4">
-                                <div class="fw-bold text-dark">{{ lig.cliente.nome }}</div>
+                                <div class="fw-bold text-dark fs-6">{{ lig.cliente.nome }}</div>
                                 <span class="badge bg-light text-secondary border small">{{ lig.cliente.bairro }}</span>
-                                <div class="mt-2 p-2 bg-white rounded border border-danger border-opacity-25 small text-dark shadow-sm">
-                                    <i class="fas fa-history text-danger me-1"></i> <strong>Motivo do Retorno:</strong><br>
-                                    <span class="text-muted">{{ lig.observacao|default:"Sem nota do operador." }}</span>
+                                <!-- Contexto da última ligação -->
+                                <div class="mt-2 p-2 bg-white rounded border border-danger border-opacity-25 small text-dark shadow-sm d-inline-block">
+                                    <i class="fas fa-info-circle text-danger me-1"></i> <strong>Nota Anterior:</strong> 
+                                    <span class="text-muted fst-italic">{{ lig.observacao|default:"Nenhuma observação registada." }}</span>
                                 </div>
                             </td>
                             <td class="text-center">
-                                <div class="d-flex flex-column gap-1">
+                                <div class="d-flex flex-column align-items-center gap-1">
                                     <a href="tel:{{ lig.cliente.telefone }}" class="fw-bold text-dark text-decoration-none">
                                         <i class="fas fa-phone-alt me-1 text-muted"></i> {{ lig.cliente.telefone }}
                                     </a>
-                                    <!-- WhatsApp pré-programado para Retorno -->
-                                    <a href="https://wa.me/55{{ lig.cliente.telefone }}?text=Olá%20{{ lig.cliente.nome|urlencode }},%20estou%20a%20retornar%20o%20contato%20como%20combinado..." 
-                                       target="_blank" class="btn btn-sm btn-success py-0 px-2 fw-bold" style="font-size: 0.7rem;">
+                                    <a href="https://wa.me/55{{ lig.cliente.telefone }}?text=Olá%20{{ lig.cliente.nome|urlencode }},%20estou%20a%20retornar%20o%20contacto%20como%20combinámos..." 
+                                       target="_blank" class="btn btn-sm btn-success py-1 px-3 fw-bold shadow-sm" style="font-size: 0.75rem; border-radius: 6px;">
                                         <i class="fab fa-whatsapp me-1"></i> ZAP
                                     </a>
                                 </div>
@@ -191,20 +234,20 @@
                                     <form method="POST" action="{% url 'registrar_ligacao' lig.cliente.id %}" class="m-0">
                                         {% csrf_token %}
                                         <input type="hidden" name="resultado" value="VENDA_FECHADA">
-                                        <button type="submit" class="btn btn-success fw-bold px-3">
+                                        <button type="submit" class="btn btn-success fw-bold px-3 shadow-sm">
                                             <i class="fas fa-check me-1"></i> Vendeu
                                         </button>
                                     </form>
-                                    <button type="button" class="btn btn-outline-danger fw-bold"
+                                    <button type="button" class="btn btn-outline-danger fw-bold shadow-sm"
                                             data-bs-toggle="modal" data-bs-target="#modalRecusaComercial"
                                             data-action="{% url 'registrar_ligacao' lig.cliente.id %}"
                                             data-nome="{{ lig.cliente.nome }}">
-                                        <i class="fas fa-times me-1"></i> Ação
+                                        <i class="fas fa-times"></i> Ação
                                     </button>
                                     <form method="POST" action="{% url 'registrar_ligacao' lig.cliente.id %}" class="m-0">
                                         {% csrf_token %}
                                         <input type="hidden" name="resultado" value="CAIXA_POSTAL">
-                                        <button type="submit" class="btn btn-outline-secondary fw-bold" title="Ainda não atende">
+                                        <button type="submit" class="btn btn-outline-secondary fw-bold shadow-sm" title="Ainda não atende">
                                             <i class="fas fa-voicemail"></i>
                                         </button>
                                     </form>
@@ -214,9 +257,9 @@
                         {% empty %}
                         <tr>
                             <td colspan="3" class="text-center text-muted py-5">
-                                <i class="fas fa-calendar-check fa-3x mb-3 text-secondary opacity-50"></i>
-                                <h6 class="fw-bold">Fila Vazia!</h6>
-                                <p class="small">Você não tem ligações reagendadas para o dia de hoje.</p>
+                                <i class="fas fa-calendar-check fa-4x mb-3 text-secondary opacity-25"></i>
+                                <h5 class="fw-bold text-dark">Fila Vazia!</h5>
+                                <p class="small mb-0">Você não tem ligações reagendadas para o dia de hoje.</p>
                             </td>
                         </tr>
                         {% endfor %}
@@ -234,7 +277,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
             <div class="modal-header bg-dark text-white border-0">
-                <h5 class="modal-title fw-bold text-uppercase small"><i class="fas fa-phone-slash me-2"></i> Desfecho da Ligação</h5>
+                <h5 class="modal-title fw-bold text-uppercase small"><i class="fas fa-phone-slash me-2" style="color: var(--sgb-orange);"></i> Desfecho da Ligação</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             
@@ -242,34 +285,35 @@
                 {% csrf_token %}
                 
                 <div class="modal-body p-4">
-                    <p class="text-muted small mb-3">Cliente: <strong id="nomeClienteModal" class="text-dark"></strong></p>
+                    <p class="text-muted small mb-4">A registar nota para: <strong id="nomeClienteModal" class="text-dark fs-6"></strong></p>
                     
                     <!-- Escolha da Ação -->
-                    <label class="form-label small fw-bold text-dark text-uppercase">O que o cliente disse?</label>
+                    <label class="form-label small fw-bold text-dark text-uppercase">O que o cliente respondeu?</label>
                     <div class="d-flex gap-2 mb-4">
                         <input type="radio" class="btn-check" name="resultado" id="opt_recusa" value="RECUSA" checked onchange="toggleAgendamento()">
-                        <label class="btn btn-outline-danger w-50 fw-bold" for="opt_recusa">Não Quis Agora</label>
+                        <label class="btn btn-outline-danger w-50 fw-bold py-2" for="opt_recusa">Não Quis Agora</label>
                         
                         <input type="radio" class="btn-check" name="resultado" id="opt_reagendar" value="REAGENDADO" onchange="toggleAgendamento()">
-                        <label class="btn btn-outline-primary w-50 fw-bold" for="opt_reagendar">Ligar Depois</label>
+                        <label class="btn btn-outline-primary w-50 fw-bold py-2" for="opt_reagendar">Ligar Depois</label>
                     </div>
 
                     <!-- Bloco de Reagendamento (Oculto por padrão) -->
-                    <div id="bloco_agendamento" class="d-none mb-3 p-3 bg-light rounded border border-primary border-opacity-25">
-                        <label class="form-label small fw-bold text-primary text-uppercase"><i class="far fa-calendar-alt me-1"></i> Data de Retorno</label>
-                        <input type="date" name="data_agendamento" id="data_agendamento_input" class="form-control">
+                    <div id="bloco_agendamento" class="d-none mb-3 p-3 bg-light rounded border border-primary border-opacity-25 shadow-sm">
+                        <label class="form-label small fw-bold text-primary text-uppercase"><i class="far fa-calendar-alt me-1"></i> Agendar Retorno para:</label>
+                        <input type="date" name="data_agendamento" id="data_agendamento_input" class="form-control fw-bold text-dark">
                     </div>
 
                     <!-- Observação (Obrigatória se agendar) -->
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-muted text-uppercase">Notas da Conversa</label>
-                        <textarea name="observacao" class="form-control bg-light border-0 shadow-sm" rows="3" placeholder="Ex: Achou caro, comprou da Nacional por R$ 90... ou Pediu para ligar sexta à tarde."></textarea>
+                        <textarea name="observacao" class="form-control bg-light border-0 shadow-sm" rows="3" placeholder="Ex: Achou caro, comprou da Nacional... ou Pediu para ligar na sexta à tarde."></textarea>
                     </div>
                 </div>
                 
                 <div class="modal-footer bg-light border-0">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-dark fw-bold px-4 shadow-sm">Guardar Registo</button>
+                    <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <!-- Botão de submissão alinhado à marca (Preto) -->
+                    <button type="submit" class="btn btn-dark fw-bold px-4 shadow-sm" style="background-color: var(--sgb-black);">Salvar Registo</button>
                 </div>
             </form>
         </div>
