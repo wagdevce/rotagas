@@ -99,7 +99,7 @@
                     <select name="agente_id" class="form-select bg-light border-0" required>
                         <option value="" disabled selected>Selecione um Estagiário...</option>
                         {% for u in usuarios %}
-                            {% if u.is_staff and not u.is_superuser %}
+                            {% if not u.is_superuser %}
                                 <option value="{{ u.id }}">{{ u.username }}</option>
                             {% endif %}
                         {% endfor %}
