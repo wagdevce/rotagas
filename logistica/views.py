@@ -127,7 +127,7 @@ def registrar_visita(request, id_visita):
             # Atualiza o robô de previsão de compras
             atualizar_inteligencia_consumo(visita.cliente)
             
-            messages.success(request, f"Venda de R$ {valor} registada com sucesso.")
+            messages.success(request, "Venda registada com sucesso.")
         else:
             visita.status = STATUS_NAO_VENDA
             visita.motivo_nao_venda = request.POST.get('motivo_nao_venda')
@@ -157,12 +157,12 @@ def dash_comercial(request):
         data_ligacao__date=hoje
     ).values_list('cliente_id', flat=True)
 
-    # Exibe clientes ordenados pelos que mais devem
+    # Exibe clientes ordenados alfabeticamente (remoção do foco em dívida)
     clientes = Cliente.objects.filter(
         carteiras__in=carteiras
     ).exclude(
         id__in=clientes_ja_ligados
-    ).distinct().order_by('-divida_atual')
+    ).distinct().order_by('nome')
 
     ligacoes_hoje = Ligacao.objects.filter(agente=request.user, data_ligacao__date=hoje)
     
@@ -181,7 +181,7 @@ def dash_comercial(request):
 @login_required
 @transaction.atomic
 def registrar_ligacao(request, cliente_id):
-    """Processa o clique rápido de prospeção."""
+    """Processa o clique rápido de prospecção."""
     if request.method == 'POST':
         cliente = get_object_or_404(Cliente, pk=cliente_id)
         resultado = request.POST.get('resultado')
@@ -419,7 +419,7 @@ def distribuir_rotas(request):
     elif status_filter == 'ATRASADOS': 
         clientes = [c for c in clientes if c.is_atrasado]
     elif status_filter == 'SEM_HISTORICO': 
-        clientes = [c for c in clientes if c.data_ultima_venda is None] # <-- O novo filtro para recém-importados
+        clientes = [c for c in clientes if c.data_ultima_venda is None]
 
     context = {
         'clientes': clientes,
@@ -433,7 +433,7 @@ def distribuir_rotas(request):
     return render(request, 'logistica/distribuir_rotas.html', context)
 
 # ==============================================================================
-# GESTÃO DE CARTEIRAS, CADASTROS E IMPORTAÇÃO DE ABA
+# GESTÃO DE CARTEIRAS, CADASTROS E IMPORTAÇÃO
 # ==============================================================================
 
 @login_required
@@ -450,6 +450,7 @@ def cadastrar_cliente(request):
         if nome:
             Cliente.objects.create(
                 nome=nome,
+                # Limpa o telefone para o padrão do sistema (WhatsApp)
                 telefone=telefone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20],
                 endereco=endereco,
                 bairro=bairro

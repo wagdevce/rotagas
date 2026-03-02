@@ -57,7 +57,7 @@ class Cliente(models.Model):
     @property
     def dias_desde_ultima_compra(self):
         if not self.data_ultima_venda:
-            return 999
+            return 0
         return (timezone.now().date() - self.data_ultima_venda).days
 
     @property
