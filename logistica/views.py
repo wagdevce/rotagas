@@ -24,7 +24,7 @@ STATUS_NAO_VENDA = 'NAO_VENDA'
 # ==============================================================================
 
 def converter_valor(valor_str):
-    """Converte strings monetárias para Decimal de forma segura."""
+    """Converte strings monetárias (ex: 150,00) para Decimal de forma segura."""
     if not valor_str: return Decimal('0.00')
     try:
         valor_limpo = str(valor_str).replace('.', '').replace(',', '.')
@@ -57,13 +57,16 @@ def atualizar_inteligencia_consumo(cliente):
 
 @login_required
 def home(request):
-    """Controlador de Tráfego por perfil."""
+    """Controlador de Tráfego: Redireciona o utilizador conforme o seu perfil."""
+    # 1. Gerentes/Staff -> Dashboard
     if request.user.is_staff: 
         return redirect('dashboard')
     
+    # 2. Agentes Comerciais (Estagiários) -> Cockpit de Ligações
     if request.user.groups.filter(name='Agentes Comerciais').exists() or Carteira.objects.filter(agente_comercial=request.user).exists():
         return redirect('dash_comercial')
 
+    # 3. Motoqueiros -> Lista de entregas do dia e Resumo
     hoje = timezone.now().date()
     visitas_pendentes = Visita.objects.select_related('cliente').filter(
         rota__motoqueiro=request.user,
@@ -95,7 +98,7 @@ def home(request):
 @login_required
 @transaction.atomic
 def registrar_visita(request, id_visita):
-    """Baixa de entrega com GPS."""
+    """Ecrã de baixa de entrega com Blindagem GPS."""
     visita = get_object_or_404(Visita.objects.select_related('cliente', 'rota'), pk=id_visita)
     
     if visita.rota.motoqueiro != request.user and not request.user.is_staff: 
@@ -104,11 +107,12 @@ def registrar_visita(request, id_visita):
     if request.method == 'POST':
         resultado_venda = request.POST.get('resultado_venda')
         
+        # --- CAPTURA DE GPS (Blindagem Operacional) ---
         try:
             visita.latitude_checkin = float(request.POST.get('lat'))
             visita.longitude_checkin = float(request.POST.get('lng'))
         except (TypeError, ValueError):
-            pass
+            pass # Mantém nulo caso o GPS tenha falhado
 
         if resultado_venda == 'SIM':
             valor = converter_valor(request.POST.get('valor_recebido'))
@@ -117,7 +121,9 @@ def registrar_visita(request, id_visita):
             visita.cliente.divida_atual -= valor
             visita.cliente.save()
             
+            # Atualiza o robô de previsão de compras
             atualizar_inteligencia_consumo(visita.cliente)
+            
             messages.success(request, "Venda registada com sucesso.")
         else:
             visita.status = STATUS_NAO_VENDA
@@ -138,16 +144,17 @@ def registrar_visita(request, id_visita):
 
 @login_required
 def dash_comercial(request):
-    """Cockpit Comercial com Fila de Retornos e Abas."""
+    """Cockpit de Alta Produtividade para o Agente Comercial."""
     carteiras = Carteira.objects.filter(agente_comercial=request.user)
     hoje = timezone.now().date()
     
+    # Exclui clientes que já receberam ligação hoje para não repetir
     clientes_ja_ligados_ids = Ligacao.objects.filter(
         agente=request.user, 
         data_ligacao__date=hoje
     ).values_list('cliente_id', flat=True)
 
-    # 1. Filtra a Fila de Retornos O(N)
+    # --- ESTRUTURA DE DADOS 1: FILA DE RETORNOS (FOLLOW-UP) ---
     ligacoes_retorno_brutas = Ligacao.objects.filter(
         agente=request.user,
         resultado='REAGENDADO',
@@ -156,6 +163,7 @@ def dash_comercial(request):
         cliente_id__in=clientes_ja_ligados_ids
     ).select_related('cliente').order_by('data_retorno', '-data_ligacao')
 
+    # Desduplicação O(N): Garante que o cliente só aparece 1 vez
     retornos_unicos = {}
     for lig in ligacoes_retorno_brutas:
         if lig.cliente_id not in retornos_unicos:
@@ -164,7 +172,7 @@ def dash_comercial(request):
     lista_retornos = list(retornos_unicos.values())
     ids_clientes_retorno = [lig.cliente_id for lig in lista_retornos]
 
-    # 2. Filtra a Fila Principal
+    # --- ESTRUTURA DE DADOS 2: MAILING PRINCIPAL ---
     clientes_principais = Cliente.objects.filter(
         carteiras__in=carteiras
     ).exclude(
@@ -182,6 +190,7 @@ def dash_comercial(request):
         'meta_diaria': 400
     }
 
+    # Passa as variáveis CORRETAS para o HTML das Abas
     return render(request, 'logistica/dash_comercial.html', {
         'clientes_principais': clientes_principais,
         'lista_retornos': lista_retornos,
@@ -191,13 +200,13 @@ def dash_comercial(request):
 @login_required
 @transaction.atomic
 def registrar_ligacao(request, cliente_id):
-    """Processa o clique rápido de prospecção e salva retornos."""
+    """Processa o clique rápido de prospecção."""
     if request.method == 'POST':
         cliente = get_object_or_404(Cliente, pk=cliente_id)
         resultado = request.POST.get('resultado')
         obs = request.POST.get('observacao', '')
 
-        # Trata a data de agendamento (Follow-up)
+        # Se houver data de reagendamento enviada (Follow-up)
         data_retorno_str = request.POST.get('data_agendamento')
         data_retorno = None
         if data_retorno_str:
@@ -215,6 +224,7 @@ def registrar_ligacao(request, cliente_id):
         )
 
         if resultado == 'VENDA_FECHADA':
+            # Mágica de Automação: Envia a rota para o motoqueiro
             carteira = cliente.carteiras.first()
             motoqueiro = carteira.motoqueiro if carteira else None
             
@@ -245,8 +255,10 @@ def registrar_ligacao(request, cliente_id):
 
 @login_required
 def dashboard(request):
+    """Painel de Receitas e Desempenho com Filtro de Período."""
     if not request.user.is_staff: return redirect('home')
     
+    # Captura as datas do GET
     data_inicio_str = request.GET.get('data_inicio')
     data_fim_str = request.GET.get('data_fim')
     hoje = timezone.now().date()
@@ -274,6 +286,7 @@ def dashboard(request):
     historico = visitas_periodo.select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
     qtd_ligacoes = Ligacao.objects.filter(data_ligacao__date__gte=data_inicio, data_ligacao__date__lte=data_fim).count()
 
+    # Base Inativa para KPIs
     limite_inativo = hoje - datetime.timedelta(days=15)
     qtd_inativos = Cliente.objects.filter(
         Q(data_ultima_venda__lt=limite_inativo) | Q(data_ultima_venda__isnull=True)
@@ -296,6 +309,7 @@ def dashboard(request):
 
 @login_required
 def relatorio_auditoria(request):
+    """O 'Dedo Duro' - Linha do tempo com lupa GPS e filtro de período."""
     if not request.user.is_staff: return redirect('home')
     
     data_inicio_str = request.GET.get('data_inicio')
@@ -339,11 +353,13 @@ def relatorio_auditoria(request):
 @login_required
 @transaction.atomic
 def distribuir_rotas(request):
+    """Gestão central de alocação e importação de clientes."""
     if not request.user.is_staff: return redirect('home')
     
     if request.method == 'POST':
         acao = request.POST.get('acao')
         
+        # --- IMPORTAÇÃO MASSIVA GLOBAL ---
         if acao == 'importar_csv':
             arquivo = request.FILES.get('arquivo_csv')
             if arquivo:
@@ -397,6 +413,7 @@ def distribuir_rotas(request):
                     messages.error(request, f"Erro na leitura do ficheiro: {str(e)}")
             return redirect('distribuir_rotas')
 
+        # --- DISTRIBUIÇÃO MANUAL DE ROTAS ---
         else:
             motoqueiro_id = request.POST.get('motoqueiro_id')
             c_ids = request.POST.getlist('clientes_ids')
@@ -415,6 +432,7 @@ def distribuir_rotas(request):
     if bairro: clientes = clientes.filter(bairro=bairro)
     if carteira_id: clientes = clientes.filter(carteiras__id=carteira_id)
     
+    # Filtros calculados dinamicamente (Inteligência)
     if status_filter == 'VIRADOS': 
         clientes = [c for c in clientes if c.is_virado]
     elif status_filter == 'ATRASADOS': 
@@ -439,6 +457,7 @@ def distribuir_rotas(request):
 
 @login_required
 def cadastrar_cliente(request):
+    """Permite ao Gerente cadastrar um cliente rapidamente via Pop-up."""
     if not request.user.is_staff: return redirect('home')
     
     if request.method == 'POST':
@@ -450,6 +469,7 @@ def cadastrar_cliente(request):
         if nome:
             Cliente.objects.create(
                 nome=nome,
+                # Limpa o telefone para o padrão do sistema (WhatsApp)
                 telefone=telefone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20],
                 endereco=endereco,
                 bairro=bairro
@@ -463,6 +483,7 @@ def cadastrar_cliente(request):
 
 @login_required
 def gerenciar_carteiras(request):
+    """Lista e permite a criação/eliminação de grupos de clientes."""
     if not request.user.is_staff: return redirect('home')
     if request.method == 'POST':
         acao = request.POST.get('acao')
@@ -476,45 +497,56 @@ def gerenciar_carteiras(request):
 @login_required
 @transaction.atomic
 def detalhes_carteira(request, id_carteira):
+    """Gestão fina de uma carteira específica (Muitos para Muitos)."""
     if not request.user.is_staff: return redirect('home')
     carteira = get_object_or_404(Carteira, pk=id_carteira)
     
     if request.method == 'POST':
         acao = request.POST.get('acao')
         
-        # Atribuições de Responsáveis
+        # ----------------------------------------------------
+        # ATRIBUIÇÕES DE RESPONSÁVEIS (COM BLINDAGEM POSTGRESQL)
+        # ----------------------------------------------------
         if acao == 'definir_motoqueiro':
             motoqueiro_id = request.POST.get('motoqueiro_id')
             if motoqueiro_id:
                 carteira.motoqueiro = get_object_or_404(User, id=motoqueiro_id)
                 carteira.save()
                 messages.success(request, f"Motoqueiro {carteira.motoqueiro.username} definido com sucesso!")
+        
         elif acao == 'remover_motoqueiro':
             carteira.motoqueiro = None
             carteira.save()
             messages.info(request, "Motoqueiro removido da carteira.")
+            
         elif acao == 'definir_agente':
             agente_id = request.POST.get('agente_id')
             if agente_id:
                 carteira.agente_comercial = get_object_or_404(User, id=agente_id)
                 carteira.save()
                 messages.success(request, f"Comercial {carteira.agente_comercial.username} definido com sucesso!")
+                
         elif acao == 'remover_agente':
             carteira.agente_comercial = None
             carteira.save()
             messages.info(request, "Agente Comercial removido da carteira.")
         
-        # Movimentação de Clientes
+        # ----------------------------------------------------
+        # MOVIMENTAÇÃO DE CLIENTES
+        # ----------------------------------------------------
         elif acao == 'remover_cliente':
             carteira.clientes.remove(request.POST.get('remover_id'))
             messages.info(request, "Cliente removido da carteira.")
+            
         elif acao == 'adicionar_clientes':
             ids = request.POST.getlist('clientes_ids')
             if ids: 
                 carteira.clientes.add(*ids)
                 messages.success(request, f"{len(ids)} clientes adicionados à carteira!")
         
-        # MOTOR DE IMPORTAÇÃO RESILIENTE
+        # ----------------------------------------------------
+        # MOTOR DE IMPORTAÇÃO RESILIENTE (CSV)
+        # ----------------------------------------------------
         elif acao == 'importar_csv':
             arquivo = request.FILES.get('arquivo_csv')
             if arquivo:
