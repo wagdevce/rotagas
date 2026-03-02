@@ -44,20 +44,6 @@
         color: #495057;
     }
 
-    /* Bloco Financeiro */
-    .finance-block {
-        background-color: #fff5f0; /* Fundo laranja muito claro */
-        border: 1px dashed #fdbf9c;
-        border-radius: 12px;
-    }
-
-    .finance-value {
-        font-size: 1.8rem;
-        font-weight: 900;
-        color: #d1541b;
-        letter-spacing: -1px;
-    }
-
     /* Botões "Fat-Finger" (Grandes para o polegar) */
     .btn-action-primary {
         background-color: var(--sgb-orange);
@@ -144,19 +130,9 @@
             <!-- Dados do Cliente -->
             <h3 class="client-name mb-2">{{ visita.cliente.nome }}</h3>
             
-            <div class="d-flex align-items-start mb-3">
+            <div class="d-flex align-items-start mb-4">
                 <i class="fas fa-map-marker-alt text-danger mt-1 me-2" style="font-size: 1.1rem;"></i>
                 <span class="client-address">{{ visita.cliente.endereco }} <br> <span class="fw-bold text-dark">{{ visita.cliente.bairro }}</span></span>
-            </div>
-
-            <!-- Informação Financeira (Alta Prioridade) -->
-            <div class="finance-block p-3 d-flex justify-content-between align-items-center mb-4 shadow-sm">
-                <div class="text-uppercase text-danger fw-bold" style="font-size: 0.75rem; letter-spacing: 1px;">
-                    <i class="fas fa-hand-holding-usd me-1"></i> Cobrar Cliente
-                </div>
-                <div class="finance-value">
-                    <span style="font-size: 1rem; position: relative; top: -5px;">R$</span> {{ visita.cliente.divida_atual }}
-                </div>
             </div>
 
             <!-- Ações Secundárias (Navegação e Apoio da Central) -->
@@ -198,7 +174,7 @@
             <i class="fas fa-check position-absolute top-50 start-50 translate-middle text-success" style="font-size: 50px;"></i>
         </div>
         <h2 class="fw-bold text-dark mb-2" style="letter-spacing: -1px;">Rota Finalizada!</h2>
-        <p class="text-muted fs-5 px-3">Parabéns, {{ request.user.username }}! Entregou todas as encomendas do dia.</p>
+        <p class="text-muted fs-5 px-3">Excelente trabalho, {{ request.user.username }}! Entregou todas as encomendas da fila.</p>
         
         <div class="mt-5">
             <a href="{% url 'home' %}" class="btn btn-dark btn-lg rounded-pill px-5 fw-bold shadow-sm">
