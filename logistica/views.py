@@ -482,23 +482,39 @@ def detalhes_carteira(request, id_carteira):
     if request.method == 'POST':
         acao = request.POST.get('acao')
         
+        # Atribuições de Responsáveis
         if acao == 'definir_motoqueiro':
-            carteira.motoqueiro_id = request.POST.get('motoqueiro_id')
-            carteira.save()
+            motoqueiro_id = request.POST.get('motoqueiro_id')
+            if motoqueiro_id:
+                carteira.motoqueiro = get_object_or_404(User, id=motoqueiro_id)
+                carteira.save()
+                messages.success(request, f"Motoqueiro {carteira.motoqueiro.username} definido com sucesso!")
         elif acao == 'remover_motoqueiro':
             carteira.motoqueiro = None
             carteira.save()
+            messages.info(request, "Motoqueiro removido da carteira.")
         elif acao == 'definir_agente':
-            carteira.agente_comercial_id = request.POST.get('agente_id')
-            carteira.save()
+            agente_id = request.POST.get('agente_id')
+            if agente_id:
+                carteira.agente_comercial = get_object_or_404(User, id=agente_id)
+                carteira.save()
+                messages.success(request, f"Comercial {carteira.agente_comercial.username} definido com sucesso!")
         elif acao == 'remover_agente':
             carteira.agente_comercial = None
             carteira.save()
+            messages.info(request, "Agente Comercial removido da carteira.")
+        
+        # Movimentação de Clientes
         elif acao == 'remover_cliente':
             carteira.clientes.remove(request.POST.get('remover_id'))
+            messages.info(request, "Cliente removido da carteira.")
         elif acao == 'adicionar_clientes':
             ids = request.POST.getlist('clientes_ids')
-            if ids: carteira.clientes.add(*ids)
+            if ids: 
+                carteira.clientes.add(*ids)
+                messages.success(request, f"{len(ids)} clientes adicionados à carteira!")
+        
+        # MOTOR DE IMPORTAÇÃO RESILIENTE
         elif acao == 'importar_csv':
             arquivo = request.FILES.get('arquivo_csv')
             if arquivo:
