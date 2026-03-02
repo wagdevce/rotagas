@@ -1,595 +1,313 @@
-import datetime
-import csv
-import io
-from decimal import Decimal, InvalidOperation
+{% extends 'logistica/base.html' %}
 
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
-from django.db.models import Sum, Count, Q
-from django.utils import timezone
-from django.db import transaction
-from django.contrib import messages
+{% block content %}
+<!-- CABEÇALHO E MÉTRICAS -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h4 class="fw-bold mb-0 text-dark text-uppercase"><i class="fas fa-headset me-2 text-primary"></i> Cockpit de Vendas</h4>
+        <p class="text-muted">Prospeção ativa e recuperação de clientes.</p>
+    </div>
+</div>
 
-# Importações dos Models locais
-from .models import Visita, Cliente, Rota, Carteira, Ligacao
-
-# --- CONSTANTES DE STATUS ---
-STATUS_PENDENTE = 'PENDENTE'
-STATUS_REALIZADA = 'REALIZADA'
-STATUS_NAO_VENDA = 'NAO_VENDA'
-
-# ==============================================================================
-# FUNÇÕES UTILITÁRIAS E INTELIGÊNCIA
-# ==============================================================================
-
-def converter_valor(valor_str):
-    """Converte strings monetárias (ex: 150,00) para Decimal de forma segura."""
-    if not valor_str: return Decimal('0.00')
-    try:
-        valor_limpo = str(valor_str).replace('.', '').replace(',', '.')
-        return Decimal(valor_limpo)
-    except (InvalidOperation, ValueError):
-        return Decimal('0.00')
-
-def atualizar_inteligencia_consumo(cliente):
-    """
-    Calcula a média de dias entre as últimas compras (CMC) 
-    para prever a próxima data de fim de gás.
-    """
-    historico = Visita.objects.filter(
-        cliente=cliente, 
-        status=STATUS_REALIZADA
-    ).order_by('-data_visita')[:3]
-
-    if len(historico) >= 2:
-        intervalos = []
-        for i in range(len(historico) - 1):
-            delta = (historico[i].data_visita.date() - historico[i+1].data_visita.date()).days
-            if delta > 0: intervalos.append(delta)
-        
-        if intervalos:
-            cliente.ciclo_consumo_dias = sum(intervalos) / len(intervalos)
+<div class="row g-3 mb-4">
+    <!-- Meta Diária -->
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100 bg-dark text-white">
+            <div class="card-body text-center py-3">
+                <i class="fas fa-bullseye fa-2x mb-2 text-warning"></i>
+                <h3 class="fw-bold mb-0">{{ metricas.total_feitas }} <span class="fs-6 text-muted">/ {{ metricas.meta_diaria }}</span></h3>
+                <small class="text-uppercase" style="font-size: 0.7rem;">Ligações Feitas</small>
+            </div>
+        </div>
+    </div>
     
-    cliente.data_ultima_venda = timezone.now().date()
-    cliente.save()
-
-# ==============================================================================
-# MÓDULO DE ACESSO E TRÁFEGO
-# ==============================================================================
-
-@login_required
-def home(request):
-    """Controlador de Tráfego: Redireciona o utilizador conforme o seu perfil."""
-    # 1. Gerentes/Staff -> Dashboard
-    if request.user.is_staff: 
-        return redirect('dashboard')
+    <!-- Vendas -->
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100 border-bottom border-success border-3">
+            <div class="card-body text-center py-3">
+                <i class="fas fa-check-circle fa-2x mb-2 text-success opacity-75"></i>
+                <h3 class="fw-bold mb-0 text-dark">{{ metricas.vendas_fechadas }}</h3>
+                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Vendas Fechadas</small>
+            </div>
+        </div>
+    </div>
     
-    # 2. Agentes Comerciais (Estagiários) -> Cockpit de Ligações
-    if request.user.groups.filter(name='Agentes Comerciais').exists() or Carteira.objects.filter(agente_comercial=request.user).exists():
-        return redirect('dash_comercial')
+    <!-- Recusas -->
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100 border-bottom border-danger border-3">
+            <div class="card-body text-center py-3">
+                <i class="fas fa-times-circle fa-2x mb-2 text-danger opacity-75"></i>
+                <h3 class="fw-bold mb-0 text-dark">{{ metricas.recusas }}</h3>
+                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Recusas / Concorrência</small>
+            </div>
+        </div>
+    </div>
 
-    # 3. Motoqueiros -> Lista de entregas do dia e Resumo
-    hoje = timezone.now().date()
-    visitas_pendentes = Visita.objects.select_related('cliente').filter(
-        rota__motoqueiro=request.user,
-        rota__data_criacao__date=hoje,
-        status=STATUS_PENDENTE
-    ).order_by('cliente__bairro', 'cliente__nome')
+    <!-- Como funciona -->
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100 bg-light">
+            <div class="card-body py-3 d-flex flex-column justify-content-center">
+                <small class="fw-bold text-dark text-uppercase mb-1"><i class="fas fa-info-circle me-1"></i> Auto-Despacho</small>
+                <small class="text-muted" style="font-size: 0.75rem; line-height: 1.2;">Ao clicar em <b>Vendeu</b>, a entrega é enviada instantaneamente para o motoqueiro da carteira.</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- NAVEGAÇÃO POR ABAS (FILA DE TRABALHO) -->
+<ul class="nav nav-pills mb-3 gap-2" id="pills-tab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-bold text-uppercase small px-4 rounded-pill border shadow-sm" id="pills-mailing-tab" data-bs-toggle="pill" data-bs-target="#pills-mailing" type="button" role="tab">
+            <i class="fas fa-list me-1"></i> Mailing Principal
+            <span class="badge bg-dark ms-2 rounded-pill">{{ clientes_principais.count }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold text-uppercase small px-4 rounded-pill border shadow-sm position-relative" id="pills-retornos-tab" data-bs-toggle="pill" data-bs-target="#pills-retornos" type="button" role="tab">
+            <i class="fas fa-history me-1"></i> Agendados Hoje
+            {% if lista_retornos|length > 0 %}
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light shadow-sm">
+                {{ lista_retornos|length }}
+                <span class="visually-hidden">retornos pendentes</span>
+            </span>
+            {% endif %}
+        </button>
+    </li>
+</ul>
+
+<!-- CONTEÚDO DAS ABAS -->
+<div class="tab-content" id="pills-tabContent">
     
-    visitas_finalizadas = Visita.objects.select_related('cliente').filter(
-        rota__motoqueiro=request.user,
-        rota__data_criacao__date=hoje,
-    ).exclude(status=STATUS_PENDENTE).order_by('-data_visita')
+    <!-- ABA 1: MAILING PRINCIPAL -->
+    <div class="tab-pane fade show active" id="pills-mailing" role="tabpanel">
+        <div class="card border-0 shadow-sm mb-5">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4 text-uppercase small text-muted py-3">Dados do Cliente</th>
+                            <th class="text-uppercase small text-muted py-3 text-center">Contato</th>
+                            <th class="pe-4 text-uppercase small text-muted py-3 text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cliente in clientes_principais %}
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-bold text-dark">{{ cliente.nome }}</div>
+                                <span class="badge bg-light text-secondary border small">{{ cliente.bairro }}</span>
+                                {% if cliente.is_atrasado %}
+                                    <span class="badge bg-warning text-dark border-0 small">Há {{ cliente.dias_desde_ultima_compra }} dias sem comprar</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex flex-column gap-1">
+                                    <a href="tel:{{ cliente.telefone }}" class="fw-bold text-dark text-decoration-none">
+                                        <i class="fas fa-phone-alt me-1 text-muted"></i> {{ cliente.telefone }}
+                                    </a>
+                                    <a href="https://wa.me/55{{ cliente.telefone }}?text=Olá%20{{ cliente.nome|urlencode }},%20vi%20que%20seu%20gás%20pode%20estar%20acabando..." 
+                                       target="_blank" class="btn btn-sm btn-success py-0 px-2 fw-bold" style="font-size: 0.7rem;">
+                                        <i class="fab fa-whatsapp me-1"></i> ZAP
+                                    </a>
+                                </div>
+                            </td>
+                            <td class="pe-4 text-end">
+                                <div class="d-flex gap-2 justify-content-end">
+                                    <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="resultado" value="VENDA_FECHADA">
+                                        <button type="submit" class="btn btn-success fw-bold px-3">
+                                            <i class="fas fa-check me-1"></i> Vendeu
+                                        </button>
+                                    </form>
+                                    <button type="button" class="btn btn-outline-danger fw-bold"
+                                            data-bs-toggle="modal" data-bs-target="#modalRecusaComercial"
+                                            data-action="{% url 'registrar_ligacao' cliente.id %}"
+                                            data-nome="{{ cliente.nome }}">
+                                        <i class="fas fa-times me-1"></i> Ação
+                                    </button>
+                                    <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="resultado" value="CAIXA_POSTAL">
+                                        <button type="submit" class="btn btn-outline-secondary fw-bold" title="Sem Atender">
+                                            <i class="fas fa-voicemail"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-5">
+                                <i class="fas fa-check-circle fa-3x mb-3 text-success opacity-50"></i>
+                                <h6 class="fw-bold">Mailing Finalizado!</h6>
+                                <p class="small">Todos os clientes da lista principal já foram contatados hoje.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-    resumo_dia = visitas_finalizadas.aggregate(
-        total_recebido=Sum('valor_recebido'),
-        qtd_sucesso=Count('id', filter=Q(status=STATUS_REALIZADA)),
-        qtd_falha=Count('id', filter=Q(status=STATUS_NAO_VENDA))
-    )
-    
-    return render(request, 'logistica/dash_motoqueiro.html', {
-        'visitas': visitas_pendentes,
-        'visitas_finalizadas': visitas_finalizadas,
-        'resumo_dia': resumo_dia
-    })
+    <!-- ABA 2: RETORNOS AGENDADOS -->
+    <div class="tab-pane fade" id="pills-retornos" role="tabpanel">
+        <div class="card border-0 shadow-sm mb-5 border-danger border-opacity-25" style="border-top: 4px solid #dc3545 !important;">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4 text-uppercase small text-muted py-3">Cliente em Retorno</th>
+                            <th class="text-uppercase small text-muted py-3 text-center">Contato</th>
+                            <th class="pe-4 text-uppercase small text-muted py-3 text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lig in lista_retornos %}
+                        <tr class="bg-danger bg-opacity-10">
+                            <td class="ps-4">
+                                <div class="fw-bold text-dark">{{ lig.cliente.nome }}</div>
+                                <span class="badge bg-light text-secondary border small">{{ lig.cliente.bairro }}</span>
+                                <div class="mt-2 p-2 bg-white rounded border border-danger border-opacity-25 small text-dark shadow-sm">
+                                    <i class="fas fa-history text-danger me-1"></i> <strong>Motivo do Retorno:</strong><br>
+                                    <span class="text-muted">{{ lig.observacao|default:"Sem nota do operador." }}</span>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex flex-column gap-1">
+                                    <a href="tel:{{ lig.cliente.telefone }}" class="fw-bold text-dark text-decoration-none">
+                                        <i class="fas fa-phone-alt me-1 text-muted"></i> {{ lig.cliente.telefone }}
+                                    </a>
+                                    <!-- WhatsApp pré-programado para Retorno -->
+                                    <a href="https://wa.me/55{{ lig.cliente.telefone }}?text=Olá%20{{ lig.cliente.nome|urlencode }},%20estou%20a%20retornar%20o%20contato%20como%20combinado..." 
+                                       target="_blank" class="btn btn-sm btn-success py-0 px-2 fw-bold" style="font-size: 0.7rem;">
+                                        <i class="fab fa-whatsapp me-1"></i> ZAP
+                                    </a>
+                                </div>
+                            </td>
+                            <td class="pe-4 text-end">
+                                <div class="d-flex gap-2 justify-content-end">
+                                    <form method="POST" action="{% url 'registrar_ligacao' lig.cliente.id %}" class="m-0">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="resultado" value="VENDA_FECHADA">
+                                        <button type="submit" class="btn btn-success fw-bold px-3">
+                                            <i class="fas fa-check me-1"></i> Vendeu
+                                        </button>
+                                    </form>
+                                    <button type="button" class="btn btn-outline-danger fw-bold"
+                                            data-bs-toggle="modal" data-bs-target="#modalRecusaComercial"
+                                            data-action="{% url 'registrar_ligacao' lig.cliente.id %}"
+                                            data-nome="{{ lig.cliente.nome }}">
+                                        <i class="fas fa-times me-1"></i> Ação
+                                    </button>
+                                    <form method="POST" action="{% url 'registrar_ligacao' lig.cliente.id %}" class="m-0">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="resultado" value="CAIXA_POSTAL">
+                                        <button type="submit" class="btn btn-outline-secondary fw-bold" title="Ainda não atende">
+                                            <i class="fas fa-voicemail"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-5">
+                                <i class="fas fa-calendar-check fa-3x mb-3 text-secondary opacity-50"></i>
+                                <h6 class="fw-bold">Fila Vazia!</h6>
+                                <p class="small">Você não tem ligações reagendadas para o dia de hoje.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
-# ==============================================================================
-# MÓDULO OPERACIONAL (MOTOQUEIRO)
-# ==============================================================================
-
-@login_required
-@transaction.atomic
-def registrar_visita(request, id_visita):
-    """Ecrã de baixa de entrega com Blindagem GPS."""
-    visita = get_object_or_404(Visita.objects.select_related('cliente', 'rota'), pk=id_visita)
-    
-    if visita.rota.motoqueiro != request.user and not request.user.is_staff: 
-        return redirect('home')
-
-    if request.method == 'POST':
-        resultado_venda = request.POST.get('resultado_venda')
-        
-        # --- CAPTURA DE GPS (Blindagem Operacional) ---
-        try:
-            visita.latitude_checkin = float(request.POST.get('lat'))
-            visita.longitude_checkin = float(request.POST.get('lng'))
-        except (TypeError, ValueError):
-            pass # Mantém nulo caso o GPS tenha falhado
-
-        if resultado_venda == 'SIM':
-            valor = converter_valor(request.POST.get('valor_recebido'))
-            visita.status = STATUS_REALIZADA
-            visita.valor_recebido = valor
-            visita.cliente.divida_atual -= valor
-            visita.cliente.save()
+<!-- ==========================================
+     MODAL DE RECUSA / AGENDAMENTO COMERCIAL
+=========================================== -->
+<div class="modal fade" id="modalRecusaComercial" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold text-uppercase small"><i class="fas fa-phone-slash me-2"></i> Desfecho da Ligação</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
             
-            # Atualiza o robô de previsão de compras
-            atualizar_inteligencia_consumo(visita.cliente)
-            
-            messages.success(request, "Venda registada com sucesso.")
-        else:
-            visita.status = STATUS_NAO_VENDA
-            visita.motivo_nao_venda = request.POST.get('motivo_nao_venda')
-            visita.concorrente_empresa = request.POST.get('concorrente_empresa')
-            visita.concorrente_preco = converter_valor(request.POST.get('concorrente_preco'))
-            visita.observacao = request.POST.get('observacao')
-            messages.info(request, "Visita finalizada como Não Venda.")
-
-        visita.save()
-        return redirect('home')
-
-    return render(request, 'logistica/registrar_visita.html', {'visita': visita})
-
-# ==============================================================================
-# MÓDULO COMERCIAL (ESTAGIÁRIO / CALL CENTER)
-# ==============================================================================
-
-@login_required
-def dash_comercial(request):
-    """Cockpit de Alta Produtividade para o Agente Comercial."""
-    carteiras = Carteira.objects.filter(agente_comercial=request.user)
-    hoje = timezone.now().date()
-    
-    # Exclui clientes que já receberam ligação hoje para não repetir
-    clientes_ja_ligados_ids = Ligacao.objects.filter(
-        agente=request.user, 
-        data_ligacao__date=hoje
-    ).values_list('cliente_id', flat=True)
-
-    # --- ESTRUTURA DE DADOS 1: FILA DE RETORNOS (FOLLOW-UP) ---
-    # Busca todas as ligações "REAGENDADAS" para hoje ou para datas que já passaram.
-    ligacoes_retorno_brutas = Ligacao.objects.filter(
-        agente=request.user,
-        resultado='REAGENDADO',
-        data_retorno__lte=hoje
-    ).exclude(
-        cliente_id__in=clientes_ja_ligados_ids # Tira da fila se ele já ligou hoje
-    ).select_related('cliente').order_by('data_retorno', '-data_ligacao')
-
-    # Desduplicação O(N): Garante que o cliente só aparece 1 vez (o agendamento mais recente)
-    retornos_unicos = {}
-    for lig in ligacoes_retorno_brutas:
-        if lig.cliente_id not in retornos_unicos:
-            retornos_unicos[lig.cliente_id] = lig
-            
-    lista_retornos = list(retornos_unicos.values())
-    ids_clientes_retorno = [lig.cliente_id for lig in lista_retornos]
-
-    # --- ESTRUTURA DE DADOS 2: MAILING PRINCIPAL ---
-    # Exibe a base normal, mas remove quem já foi ligado hoje e quem já está na aba de retornos
-    clientes_principais = Cliente.objects.filter(
-        carteiras__in=carteiras
-    ).exclude(
-        id__in=clientes_ja_ligados_ids
-    ).exclude(
-        id__in=ids_clientes_retorno
-    ).distinct().order_by('nome')
-
-    ligacoes_hoje = Ligacao.objects.filter(agente=request.user, data_ligacao__date=hoje)
-    
-    metricas = {
-        'total_feitas': ligacoes_hoje.count(),
-        'vendas_fechadas': ligacoes_hoje.filter(resultado='VENDA_FECHADA').count(),
-        'recusas': ligacoes_hoje.filter(resultado='RECUSA').count(),
-        'meta_diaria': 400
-    }
-
-    return render(request, 'logistica/dash_comercial.html', {
-        'clientes_principais': clientes_principais,
-        'lista_retornos': lista_retornos,
-        'metricas': metricas
-    })
-
-@login_required
-@transaction.atomic
-def registrar_ligacao(request, cliente_id):
-    """Processa o clique rápido de prospecção."""
-    if request.method == 'POST':
-        cliente = get_object_or_404(Cliente, pk=cliente_id)
-        resultado = request.POST.get('resultado')
-        obs = request.POST.get('observacao', '')
-
-        # Se houver data de reagendamento enviada (Follow-up)
-        data_retorno_str = request.POST.get('data_agendamento')
-        data_retorno = None
-        if data_retorno_str:
-            try:
-                data_retorno = datetime.datetime.strptime(data_retorno_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
-
-        Ligacao.objects.create(
-            agente=request.user, 
-            cliente=cliente, 
-            resultado=resultado, 
-            observacao=obs,
-            data_retorno=data_retorno
-        )
-
-        if resultado == 'VENDA_FECHADA':
-            # Mágica de Automação: Envia a rota para o motoqueiro
-            carteira = cliente.carteiras.first()
-            motoqueiro = carteira.motoqueiro if carteira else None
-            
-            if motoqueiro:
-                hoje = timezone.now().date()
-                rota, _ = Rota.objects.get_or_create(
-                    motoqueiro=motoqueiro, 
-                    data_criacao__date=hoje,
-                    defaults={'nome': f"Rota Comercial {hoje.strftime('%d/%m')}"}
-                )
-                Visita.objects.create(
-                    rota=rota, 
-                    cliente=cliente, 
-                    status=STATUS_PENDENTE,
-                    observacao=f"Venda Telemarketing ({request.user.username}): {obs}"
-                )
-                messages.success(request, f"Venda fechada! {motoqueiro.username} recebeu a entrega no app.")
-            else:
-                messages.warning(request, "Venda registada, mas cliente sem motoqueiro atribuído na carteira.")
-        else:
-            messages.info(request, f"Contacto registado: {resultado.replace('_', ' ')}")
-
-    return redirect('dash_comercial')
-
-# ==============================================================================
-# MÓDULO GERENCIAL (DASHBOARD E AUDITORIA)
-# ==============================================================================
-
-@login_required
-def dashboard(request):
-    """Painel de Receitas e Desempenho com Filtro de Período."""
-    if not request.user.is_staff: return redirect('home')
-    
-    # Captura as datas do GET
-    data_inicio_str = request.GET.get('data_inicio')
-    data_fim_str = request.GET.get('data_fim')
-    hoje = timezone.now().date()
-    
-    try:
-        data_inicio = datetime.datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else hoje
-        data_fim = datetime.datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else hoje
-    except ValueError:
-        data_inicio = hoje
-        data_fim = hoje
-
-    if data_inicio > data_fim:
-        data_inicio, data_fim = data_fim, data_inicio
-
-    visitas_periodo = Visita.objects.filter(rota__data_criacao__date__gte=data_inicio, rota__data_criacao__date__lte=data_fim)
-    
-    resumo = visitas_periodo.aggregate(
-        total_recebido=Sum('valor_recebido'),
-        pendentes=Count('id', filter=Q(status=STATUS_PENDENTE)),
-        vendas=Count('id', filter=Q(status=STATUS_REALIZADA)),
-        concorrencia=Count('id', filter=Q(motivo_nao_venda='CONCORRENCIA')),
-        estoque=Count('id', filter=Q(motivo_nao_venda='NAO_PRECISA'))
-    )
-
-    historico = visitas_periodo.select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
-    qtd_ligacoes = Ligacao.objects.filter(data_ligacao__date__gte=data_inicio, data_ligacao__date__lte=data_fim).count()
-
-    # Base Inativa para KPIs
-    limite_inativo = hoje - datetime.timedelta(days=15)
-    qtd_inativos = Cliente.objects.filter(
-        Q(data_ultima_venda__lt=limite_inativo) | Q(data_ultima_venda__isnull=True)
-    ).count()
-
-    return render(request, 'logistica/dashboard.html', {
-        'total_dinheiro': resumo['total_recebido'] or 0,
-        'pendentes': resumo['pendentes'],
-        'realizadas': (resumo['vendas'] or 0) + (resumo['concorrencia'] or 0) + (resumo['estoque'] or 0),
-        'qtd_vendas': resumo['vendas'],
-        'qtd_perdas': (resumo['concorrencia'] or 0) + (resumo['estoque'] or 0),
-        'motivo_concorrencia': resumo['concorrencia'],
-        'motivo_estoque': resumo['estoque'],
-        'qtd_ligacoes': qtd_ligacoes,
-        'qtd_inativos': qtd_inativos,
-        'historico': historico,
-        'data_inicio': data_inicio,
-        'data_fim': data_fim,
-    })
-
-@login_required
-def relatorio_auditoria(request):
-    """O 'Dedo Duro' - Linha do tempo com lupa GPS e filtro de período."""
-    if not request.user.is_staff: return redirect('home')
-    
-    data_inicio_str = request.GET.get('data_inicio')
-    data_fim_str = request.GET.get('data_fim')
-    hoje = timezone.now().date()
-    
-    try:
-        data_inicio = datetime.datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else hoje
-        data_fim = datetime.datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else hoje
-    except ValueError:
-        data_inicio = hoje
-        data_fim = hoje
-
-    if data_inicio > data_fim:
-        data_inicio, data_fim = data_fim, data_inicio
-    
-    ligacoes = Ligacao.objects.filter(data_ligacao__date__gte=data_inicio, data_ligacao__date__lte=data_fim).select_related('agente', 'cliente').order_by('-data_ligacao')
-    
-    ranking = Ligacao.objects.filter(data_ligacao__date__gte=data_inicio, data_ligacao__date__lte=data_fim).values('agente__username').annotate(
-        total=Count('id'),
-        vendas=Count('id', filter=Q(resultado='VENDA_FECHADA'))
-    ).order_by('-total')
-
-    visitas_rua = Visita.objects.filter(
-        data_visita__date__gte=data_inicio,
-        data_visita__date__lte=data_fim
-    ).exclude(status=STATUS_PENDENTE).select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
-
-    return render(request, 'logistica/relatorio_auditoria.html', {
-        'data_inicio': data_inicio,
-        'data_fim': data_fim,
-        'ligacoes': ligacoes,
-        'ranking_comercial': ranking,
-        'visitas_rua': visitas_rua
-    })
-
-# ==============================================================================
-# MESA DE PLANEAMENTO (DISTRIBUIÇÃO E IMPORTAÇÃO MASSIVA)
-# ==============================================================================
-
-@login_required
-@transaction.atomic
-def distribuir_rotas(request):
-    """Gestão central de alocação e importação de clientes."""
-    if not request.user.is_staff: return redirect('home')
-    
-    if request.method == 'POST':
-        acao = request.POST.get('acao')
-        
-        # --- IMPORTAÇÃO MASSIVA GLOBAL ---
-        if acao == 'importar_csv':
-            arquivo = request.FILES.get('arquivo_csv')
-            if arquivo:
-                try:
-                    decoded = arquivo.read().decode('utf-8', errors='replace')
-                    io_string = io.StringIO(decoded)
-                    primeira_linha = io_string.readline()
-                    delimiter = ';' if ';' in primeira_linha else ','
-                    io_string.seek(0)
+            <form method="post" id="formRecusaComercial">
+                {% csrf_token %}
+                
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-3">Cliente: <strong id="nomeClienteModal" class="text-dark"></strong></p>
                     
-                    reader = csv.reader(io_string, delimiter=delimiter)
-                    header, col_map, contagem = [], {}, 0
-                    
-                    for row in reader:
-                        row_clean = [str(c).strip() for c in row if c]
-                        if not row_clean: continue
+                    <!-- Escolha da Ação -->
+                    <label class="form-label small fw-bold text-dark text-uppercase">O que o cliente disse?</label>
+                    <div class="d-flex gap-2 mb-4">
+                        <input type="radio" class="btn-check" name="resultado" id="opt_recusa" value="RECUSA" checked onchange="toggleAgendamento()">
+                        <label class="btn btn-outline-danger w-50 fw-bold" for="opt_recusa">Não Quis Agora</label>
                         
-                        if not header:
-                            row_lower = [c.lower() for c in row_clean]
-                            header = row_lower
-                            for i, col in enumerate(header):
-                                if 'nome resp' in col or ('nome' in col and 'nome' not in col_map): col_map['nome'] = i
-                                elif 'endere' in col: col_map['endereco'] = i
-                                elif 'número' in col or 'numero' in col: col_map['numero'] = i
-                                elif 'bairro' in col: col_map['bairro'] = i
-                                elif 'telefone' in col: col_map['telefone'] = i
-                            continue
+                        <input type="radio" class="btn-check" name="resultado" id="opt_reagendar" value="REAGENDADO" onchange="toggleAgendamento()">
+                        <label class="btn btn-outline-primary w-50 fw-bold" for="opt_reagendar">Ligar Depois</label>
+                    </div>
 
-                        if header and 'nome' in col_map:
-                            try:
-                                raw_nome = row_clean[col_map['nome']]
-                                if not raw_nome or raw_nome.isdigit(): continue
-                                
-                                end = row_clean[col_map.get('endereco', 0)] if 'endereco' in col_map else ""
-                                num = row_clean[col_map.get('numero', 0)] if 'numero' in col_map else ""
-                                bairro = row_clean[col_map.get('bairro', 0)] if 'bairro' in col_map else "Bairro não informado"
-                                tel = row_clean[col_map.get('telefone', 0)] if 'telefone' in col_map else ""
-                                
-                                Cliente.objects.get_or_create(
-                                    nome=raw_nome[:100],
-                                    defaults={
-                                        'endereco': f"{end}, {num}".strip(' ,-'),
-                                        'bairro': bairro[:50],
-                                        'telefone': tel.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20]
-                                    }
-                                )
-                                contagem += 1
-                            except Exception: continue
-                    messages.success(request, f"Sucesso! {contagem} novos clientes adicionados à base geral.")
-                except Exception as e:
-                    messages.error(request, f"Erro na leitura do ficheiro: {str(e)}")
-            return redirect('distribuir_rotas')
+                    <!-- Bloco de Reagendamento (Oculto por padrão) -->
+                    <div id="bloco_agendamento" class="d-none mb-3 p-3 bg-light rounded border border-primary border-opacity-25">
+                        <label class="form-label small fw-bold text-primary text-uppercase"><i class="far fa-calendar-alt me-1"></i> Data de Retorno</label>
+                        <input type="date" name="data_agendamento" id="data_agendamento_input" class="form-control">
+                    </div>
 
-        # --- DISTRIBUIÇÃO MANUAL DE ROTAS ---
-        else:
-            motoqueiro_id = request.POST.get('motoqueiro_id')
-            c_ids = request.POST.getlist('clientes_ids')
-            if motoqueiro_id and c_ids:
-                motoqueiro = get_object_or_404(User, id=motoqueiro_id)
-                rota = Rota.objects.create(nome=f"Rota {timezone.now().strftime('%d/%m')}", motoqueiro=motoqueiro)
-                Visita.objects.bulk_create([Visita(rota=rota, cliente_id=int(cid)) for cid in c_ids])
-                messages.success(request, f"Rota enviada para o telemóvel do {motoqueiro.username}.")
-                return redirect('distribuir_rotas')
+                    <!-- Observação (Obrigatória se agendar) -->
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Notas da Conversa</label>
+                        <textarea name="observacao" class="form-control bg-light border-0 shadow-sm" rows="3" placeholder="Ex: Achou caro, comprou da Nacional por R$ 90... ou Pediu para ligar sexta à tarde."></textarea>
+                    </div>
+                </div>
+                
+                <div class="modal-footer bg-light border-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-dark fw-bold px-4 shadow-sm">Guardar Registo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-    bairro = request.GET.get('bairro')
-    carteira_id = request.GET.get('carteira')
-    status_filter = request.GET.get('status')
-    
-    clientes = Cliente.objects.all().order_by('bairro', 'nome')
-    if bairro: clientes = clientes.filter(bairro=bairro)
-    if carteira_id: clientes = clientes.filter(carteiras__id=carteira_id)
-    
-    # Filtros calculados dinamicamente (Inteligência)
-    if status_filter == 'VIRADOS': 
-        clientes = [c for c in clientes if c.is_virado]
-    elif status_filter == 'ATRASADOS': 
-        clientes = [c for c in clientes if c.is_atrasado]
-    elif status_filter == 'SEM_HISTORICO': 
-        clientes = [c for c in clientes if c.data_ultima_venda is None]
-
-    context = {
-        'clientes': clientes,
-        'bairros': Cliente.objects.values_list('bairro', flat=True).distinct().order_by('bairro'),
-        'carteiras': Carteira.objects.all(),
-        'motoqueiros': User.objects.filter(is_staff=False),
-        'filtro_bairro': bairro, 
-        'filtro_carteira': int(carteira_id) if carteira_id else None, 
-        'filtro_status': status_filter
-    }
-    return render(request, 'logistica/distribuir_rotas.html', context)
-
-# ==============================================================================
-# GESTÃO DE CARTEIRAS, CADASTROS E IMPORTAÇÃO
-# ==============================================================================
-
-@login_required
-def cadastrar_cliente(request):
-    """Permite ao Gerente cadastrar um cliente rapidamente via Pop-up."""
-    if not request.user.is_staff: return redirect('home')
-    
-    if request.method == 'POST':
-        nome = request.POST.get('nome')
-        telefone = request.POST.get('telefone', '')
-        endereco = request.POST.get('endereco', '')
-        bairro = request.POST.get('bairro', 'Não Informado')
-        
-        if nome:
-            Cliente.objects.create(
-                nome=nome,
-                # Limpa o telefone para o padrão do sistema (WhatsApp)
-                telefone=telefone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20],
-                endereco=endereco,
-                bairro=bairro
-            )
-            messages.success(request, f"Cliente {nome} registado com sucesso!")
-        else:
-            messages.error(request, "O nome do cliente é obrigatório.")
+<script>
+    // 1. Script para injetar o ID do cliente no Modal
+    const modalRecusa = document.getElementById('modalRecusaComercial');
+    if (modalRecusa) {
+        modalRecusa.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const actionUrl = button.getAttribute('data-action');
+            const clienteNome = button.getAttribute('data-nome');
             
-    return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
-
-
-@login_required
-def gerenciar_carteiras(request):
-    """Lista e permite a criação/eliminação de grupos de clientes."""
-    if not request.user.is_staff: return redirect('home')
-    if request.method == 'POST':
-        acao = request.POST.get('acao')
-        if acao == 'criar':
-            Carteira.objects.create(nome=request.POST.get('nome'), cor_etiqueta=request.POST.get('cor'))
-        elif acao == 'excluir_carteira':
-            Carteira.objects.filter(id=request.POST.get('id_carteira')).delete()
-        return redirect('gerenciar_carteiras')
-    return render(request, 'logistica/carteiras.html', {'carteiras': Carteira.objects.all().order_by('nome')})
-
-@login_required
-@transaction.atomic
-def detalhes_carteira(request, id_carteira):
-    """Gestão fina de uma carteira específica e o seu motor de importação."""
-    if not request.user.is_staff: return redirect('home')
-    carteira = get_object_or_404(Carteira, pk=id_carteira)
-    
-    if request.method == 'POST':
-        acao = request.POST.get('acao')
-        
-        # Atribuições de Responsáveis
-        if acao == 'definir_motoqueiro':
-            carteira.motoqueiro_id = request.POST.get('motoqueiro_id')
-            carteira.save()
-        elif acao == 'remover_motoqueiro':
-            carteira.motoqueiro = None
-            carteira.save()
-        elif acao == 'definir_agente':
-            carteira.agente_comercial_id = request.POST.get('agente_id')
-            carteira.save()
-        elif acao == 'remover_agente':
-            carteira.agente_comercial = None
-            carteira.save()
-        
-        # Movimentação de Clientes Manuais
-        elif acao == 'remover_cliente':
-            carteira.clientes.remove(request.POST.get('remover_id'))
-        elif acao == 'adicionar_clientes':
-            ids = request.POST.getlist('clientes_ids')
-            if ids: carteira.clientes.add(*ids)
-        
-        # MOTOR DE IMPORTAÇÃO RESILIENTE
-        elif acao == 'importar_csv':
-            arquivo = request.FILES.get('arquivo_csv')
-            if arquivo:
-                try:
-                    decoded = arquivo.read().decode('utf-8', errors='replace')
-                    io_string = io.StringIO(decoded)
-                    primeira_linha = io_string.readline()
-                    delimiter = ';' if ';' in primeira_linha else ','
-                    io_string.seek(0)
-                    
-                    reader = csv.reader(io_string, delimiter=delimiter)
-                    header, col_map, contagem = [], {}, 0
-                    
-                    for row in reader:
-                        row_clean = [str(c).strip() for c in row if c]
-                        if not row_clean: continue
-                        
-                        if not header:
-                            row_lower = [c.lower() for c in row_clean]
-                            header = row_lower
-                            for i, col in enumerate(header):
-                                if 'nome resp' in col or ('nome' in col and 'nome' not in col_map): col_map['nome'] = i
-                                elif 'endere' in col: col_map['endereco'] = i
-                                elif 'número' in col or 'numero' in col: col_map['numero'] = i
-                                elif 'bairro' in col: col_map['bairro'] = i
-                                elif 'telefone' in col: col_map['telefone'] = i
-                            continue
-
-                        if header and 'nome' in col_map:
-                            try:
-                                raw_nome = row_clean[col_map['nome']]
-                                if not raw_nome or raw_nome.isdigit(): continue
-                                
-                                end = row_clean[col_map.get('endereco', 0)] if 'endereco' in col_map else ""
-                                num = row_clean[col_map.get('numero', 0)] if 'numero' in col_map else ""
-                                bairro = row_clean[col_map.get('bairro', 0)] if 'bairro' in col_map else "Bairro não informado"
-                                tel = row_clean[col_map.get('telefone', 0)] if 'telefone' in col_map else ""
-                                
-                                cli_obj, _ = Cliente.objects.get_or_create(
-                                    nome=raw_nome[:100],
-                                    defaults={
-                                        'endereco': f"{end}, {num}".strip(' ,-'),
-                                        'bairro': bairro[:50],
-                                        'telefone': tel.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')[:20]
-                                    }
-                                )
-                                cli_obj.carteiras.add(carteira)
-                                contagem += 1
-                            except Exception: continue
-                            
-                    messages.success(request, f"Sucesso! {contagem} clientes incorporados nesta carteira.")
-                except Exception as e:
-                    messages.error(request, f"Erro na leitura: {str(e)}")
-                    
-        return redirect('detalhes_carteira', id_carteira=id_carteira)
-
-    context = {
-        'carteira': carteira, 
-        'clientes': carteira.clientes.all().order_by('bairro', 'nome'),
-        'usuarios': User.objects.filter(is_active=True).order_by('username'),
-        'clientes_livres': Cliente.objects.filter(carteiras__isnull=True).order_by('bairro', 'nome')
+            document.getElementById('formRecusaComercial').action = actionUrl;
+            document.getElementById('nomeClienteModal').textContent = clienteNome;
+            
+            // Resetar o modal sempre que abre
+            document.getElementById('opt_recusa').checked = true;
+            toggleAgendamento();
+        });
     }
-    return render(request, 'logistica/detalhes_carteira.html', context)
+
+    // 2. Script para alternar o campo de data
+    function toggleAgendamento() {
+        const isReagendar = document.getElementById('opt_reagendar').checked;
+        const blocoData = document.getElementById('bloco_agendamento');
+        const inputData = document.getElementById('data_agendamento_input');
+        
+        if (isReagendar) {
+            blocoData.classList.remove('d-none');
+            inputData.required = true;
+        } else {
+            blocoData.classList.add('d-none');
+            inputData.required = false;
+            inputData.value = '';
+        }
+    }
+</script>
+{% endblock %}
