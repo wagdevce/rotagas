@@ -12,7 +12,8 @@ from logistica.views import (
     distribuir_rotas, 
     gerenciar_carteiras, 
     detalhes_carteira,
-    cadastrar_cliente
+    cadastrar_cliente,
+    detalhes_cliente # <--- NOVA IMPORTAÇÃO DO CRM AQUI
 )
 
 urlpatterns = [
@@ -39,6 +40,7 @@ urlpatterns = [
     
     # --- CADASTROS E GESTÃO DE CARTEIRAS ---
     path('cliente/novo/', cadastrar_cliente, name='cadastrar_cliente'),
+    path('cliente/<int:id_cliente>/', detalhes_cliente, name='detalhes_cliente'), # <--- NOVA ROTA DO CRM AQUI
     path('carteiras/', gerenciar_carteiras, name='gerenciar_carteiras'),
     path('carteiras/<int:id_carteira>/', detalhes_carteira, name='detalhes_carteira'),
 ]

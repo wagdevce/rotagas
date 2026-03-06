@@ -1,116 +1,110 @@
 {% extends 'logistica/base.html' %}
 
 {% block content %}
-
-<!-- ==========================================
-     CABEÇALHO & AÇÕES GLOBAIS
-=========================================== -->
-<div class="d-flex justify-content-between align-items-center mb-4">
+<!-- CABEÇALHO -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
     <div>
-        <h4 class="fw-bold text-uppercase mb-0" style="color: var(--sgb-black); letter-spacing: 0.5px;">
-            <i class="fas fa-map-marked-alt me-2" style="color: var(--sgb-orange);"></i> Mesa de Planeamento
+        <h4 class="fw-bold mb-0 text-dark text-uppercase" style="letter-spacing: 0.5px;">
+            <i class="fas fa-route me-2" style="color: var(--sgb-orange);"></i> Mesa de Planeamento
         </h4>
         <small class="text-muted">Gestão centralizada de rotas e alimentação de base de dados.</small>
     </div>
-    
     <div class="d-flex gap-2">
-        <!-- BOTÃO IMPORTAR CSV -->
-        <button class="btn btn-outline-success shadow-sm fw-bold border-2" data-bs-toggle="modal" data-bs-target="#modalImportarCSV">
+        <!-- Botão Importar (Abre Modal) -->
+        <button type="button" class="btn btn-outline-success fw-bold bg-white" data-bs-toggle="modal" data-bs-target="#modalImportarGlobal">
             <i class="fas fa-file-csv me-1"></i> Importar Base
         </button>
-
-        <!-- BOTÃO NOVO CLIENTE -->
-        <button class="btn btn-dark shadow-sm fw-bold border-0" data-bs-toggle="modal" data-bs-target="#modalNovoCliente">
-            <i class="fas fa-user-plus me-1" style="color: var(--sgb-orange);"></i> Novo Cliente
+        <!-- Botão Novo Cliente (Abre Modal) -->
+        <button type="button" class="btn btn-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoCliente">
+            <i class="fas fa-user-plus me-1"></i> Novo Cliente
         </button>
     </div>
 </div>
 
-<!-- ==========================================
-     FILTROS DE INTELIGÊNCIA
-=========================================== -->
-<div class="card border-0 shadow-sm mb-4 p-3 bg-white">
-    <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-3">
-            <label class="form-label small text-muted fw-bold text-uppercase">Região / Bairro</label>
-            <select name="bairro" class="form-select shadow-sm" onchange="this.form.submit()">
-                <option value="">Todas as Regiões</option>
-                {% for b in bairros %}
-                <option value="{{ b }}" {% if filtro_bairro == b %}selected{% endif %}>{{ b }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-3">
-            <label class="form-label small text-muted fw-bold text-uppercase">Carteira de Origem</label>
-            <select name="carteira" class="form-select shadow-sm" onchange="this.form.submit()">
-                <option value="">Todas as Carteiras</option>
-                {% for c in carteiras %}
-                <option value="{{ c.id }}" {% if filtro_carteira == c.id %}selected{% endif %}>{{ c.nome }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-3">
-            <label class="form-label small text-muted fw-bold text-uppercase">Perfil de Compra</label>
-            <select name="status" class="form-select shadow-sm" onchange="this.form.submit()">
-                <option value="">Todos os Clientes</option>
-                <option value="ATRASADOS" {% if filtro_status == 'ATRASADOS' %}selected{% endif %}>⚠️ Atrasados (> Consumo Médio)</option>
-                <option value="VIRADOS" {% if filtro_status == 'VIRADOS' %}selected{% endif %}>🚨 Virados (Perda Concorrência)</option>
-            </select>
-        </div>
-        <div class="col-md-3 text-end">
-            <a href="{% url 'distribuir_rotas' %}" class="btn btn-light w-100 fw-bold border text-muted">
-                <i class="fas fa-eraser me-1"></i> Limpar Filtros
-            </a>
-        </div>
-    </form>
+<!-- FILTROS -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body p-3">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Região / Bairro</label>
+                <select name="bairro" class="form-select bg-light border-0" onchange="this.form.submit()">
+                    <option value="">Todas as Regiões</option>
+                    {% for b in bairros %}
+                        <option value="{{ b }}" {% if filtro_bairro == b %}selected{% endif %}>{{ b }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Carteira de Origem</label>
+                <select name="carteira" class="form-select bg-light border-0" onchange="this.form.submit()">
+                    <option value="">Todas as Carteiras</option>
+                    {% for c in carteiras %}
+                        <option value="{{ c.id }}" {% if filtro_carteira == c.id %}selected{% endif %}>{{ c.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Perfil de Compra</label>
+                <select name="status" class="form-select bg-light border-0" onchange="this.form.submit()">
+                    <option value="">Todos os Clientes</option>
+                    <option value="VIRADOS" {% if filtro_status == 'VIRADOS' %}selected{% endif %}>Risco (Virados)</option>
+                    <option value="ATRASADOS" {% if filtro_status == 'ATRASADOS' %}selected{% endif %}>Atrasados</option>
+                    <option value="SEM_HISTORICO" {% if filtro_status == 'SEM_HISTORICO' %}selected{% endif %}>Sem Histórico (Novos)</option>
+                </select>
+            </div>
+            <div class="col-md-2 text-end">
+                <a href="{% url 'distribuir_rotas' %}" class="btn btn-light w-100 border text-muted fw-bold">
+                    <i class="fas fa-eraser me-1"></i> Limpar
+                </a>
+            </div>
+        </form>
+    </div>
 </div>
 
-<!-- ==========================================
-     MESA DE DESPACHO (LISTA + ATRIBUIÇÃO)
-=========================================== -->
-<form method="post">
+<!-- FORMULÁRIO DE DESPACHO E TABELA -->
+<form method="post" id="formDespacho">
     {% csrf_token %}
     <input type="hidden" name="acao" value="despachar">
-    
-    <!-- Barra Preta de Atribuição (Sticky Top) -->
-    <div class="card border-0 shadow-sm mb-4 sticky-top" style="background-color: var(--sgb-black); color: white; top: 80px; z-index: 1020; border-radius: 12px;">
-        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center p-3">
-            <div class="d-flex align-items-center mb-3 mb-md-0">
-                <div class="bg-warning text-dark rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 45px; height: 45px;">
-                    <i class="fas fa-route fa-lg"></i>
+
+    <!-- BARRA DE AÇÃO (PRETA) -->
+    <div class="card border-0 shadow-sm mb-4 bg-dark text-white" style="border-radius: 12px;">
+        <div class="card-body p-3 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-warning text-dark rounded-circle d-flex align-items-center justify-content-center me-3 shadow-sm" style="width: 45px; height: 45px;">
+                    <i class="fas fa-route fs-5"></i>
                 </div>
                 <div>
-                    <h6 class="fw-bold mb-0 text-uppercase">Gerar Rota de Entrega</h6>
+                    <h6 class="fw-bold mb-0 text-uppercase" style="letter-spacing: 0.5px;">Gerar Rota de Entrega</h6>
                     <small class="opacity-75">Selecione os clientes na lista e defina o motoqueiro.</small>
                 </div>
             </div>
-            <div class="d-flex gap-2 w-100" style="max-width: 450px;">
-                <select name="motoqueiro_id" class="form-select fw-bold border-0 shadow-sm" required>
-                    <option value="" selected disabled>Escolher Motoqueiro...</option>
+            <div class="d-flex gap-2 w-100 w-md-auto">
+                <select name="motoqueiro_id" class="form-select border-0 fw-bold text-dark" style="min-width: 200px;" required>
+                    <option value="" disabled selected>Escolher Motoqueiro...</option>
                     {% for m in motoqueiros %}
-                    <option value="{{ m.id }}">{{ m.username }}</option>
+                        <option value="{{ m.id }}">{{ m.username }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit" class="btn fw-bold text-uppercase px-4 shadow-sm" style="background-color: var(--sgb-orange); color: white; border:none;">
-                    <i class="fas fa-paper-plane me-2"></i> Despachar
+                <button type="submit" class="btn fw-bold shadow-sm px-4" style="background-color: var(--sgb-orange); color: white; white-space: nowrap;">
+                    <i class="fas fa-paper-plane me-1"></i> DESPACHAR
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Tabela de Clientes -->
+    <!-- TABELA DE CLIENTES -->
     <div class="card border-0 shadow-sm mb-5">
-        <div class="table-responsive">
+        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
+                <thead class="table-light sticky-top shadow-sm">
+                    <tr class="small text-muted text-uppercase fw-bold" style="letter-spacing: 0.5px;">
                         <th class="ps-4" style="width: 40px;">
-                            <input class="form-check-input border-secondary shadow-sm" type="checkbox" id="checkAll" onclick="toggleChecks(this)" style="transform: scale(1.2);">
+                            <input class="form-check-input border-secondary" type="checkbox" id="checkAll" onchange="toggleAll(this)">
                         </th>
-                        <th class="text-uppercase small text-muted py-3">Cliente / Endereço</th>
-                        <th class="text-uppercase small text-muted py-3">Tags de Inteligência</th>
-                        <th class="text-uppercase small text-muted py-3">Carteira Atual</th>
-                        <th class="pe-4 text-uppercase small text-muted text-end py-3">Saldo</th>
+                        <th>Cliente / Endereço</th>
+                        <th>Tags de Inteligência</th>
+                        <th>Carteira Atual</th>
+                        <th class="text-end pe-4">Saldo</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -120,34 +114,41 @@
                             <input class="form-check-input client-check border-secondary shadow-sm" type="checkbox" name="clientes_ids" value="{{ c.id }}" style="transform: scale(1.2);">
                         </td>
                         <td>
-                            <div class="fw-bold text-dark">{{ c.nome }}</div>
-                            <small class="text-muted"><i class="fas fa-map-marker-alt text-danger me-1"></i> {{ c.bairro }} | {{ c.endereco }}</small>
+                            <!-- LINK PARA O NOVO CRM -->
+                            <a href="{% url 'detalhes_cliente' c.id %}" class="fw-bold text-dark text-decoration-none d-inline-block mb-1" style="transition: color 0.2s;" onmouseover="this.style.color='var(--sgb-orange)'" onmouseout="this.style.color='#1A1A1A'">
+                                {{ c.nome }} <i class="fas fa-external-link-alt ms-1 small opacity-50" style="font-size: 0.7em;"></i>
+                            </a>
+                            <br>
+                            <small class="text-muted"><i class="fas fa-map-marker-alt text-danger me-1"></i> <strong>{{ c.bairro }}</strong> | {{ c.endereco }}</small>
                         </td>
                         <td>
-                            {% for tag in c.tags_visuais %}
-                                <span class="badge bg-{{ tag.cor }} shadow-sm border-0 py-2"><i class="fas {{ tag.icone }} me-1"></i> {{ tag.texto }}</span>
-                            {% empty %}
-                                <span class="badge bg-light text-muted border border-opacity-10 shadow-sm py-2">Perfil Normal</span>
-                            {% endfor %}
+                            <div class="d-flex gap-1 flex-wrap">
+                                {% for tag in c.tags_visuais %}
+                                    <span class="badge bg-{{ tag.cor }} shadow-sm"><i class="fas {{ tag.icone }} me-1"></i> {{ tag.texto }}</span>
+                                {% empty %}
+                                    <span class="badge bg-light text-secondary border">Perfil Normal</span>
+                                {% endfor %}
+                            </div>
                         </td>
                         <td>
                             {% for cart in c.carteiras.all %}
-                                <span class="badge rounded-pill shadow-sm py-2 px-3 border" style="background-color: {{ cart.cor_etiqueta }};">{{ cart.nome }}</span>
+                                <span class="badge text-white shadow-sm" style="background-color: {{ cart.cor_etiqueta }};">{{ cart.nome }}</span>
                             {% empty %}
-                                <span class="text-muted small fst-italic">Sem Carteira Atribuída</span>
+                                <span class="text-muted small fst-italic">Sem Carteira</span>
                             {% endfor %}
                         </td>
-                        <td class="pe-4 text-end">
-                            <div class="fw-bold fs-6 {% if c.divida_atual > 0 %}text-danger{% else %}text-success{% endif %}">
+                        <td class="text-end pe-4">
+                            <span class="fw-bold {% if c.divida_atual > 0 %}text-danger{% else %}text-success{% endif %}">
                                 R$ {{ c.divida_atual }}
-                            </div>
+                            </span>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
                         <td colspan="5" class="text-center py-5 text-muted">
                             <i class="fas fa-search fa-3x mb-3 opacity-25"></i>
-                            <p class="mb-0 fw-bold">Nenhum cliente disponível para os filtros selecionados.</p>
+                            <h5 class="fw-bold">Nenhum cliente encontrado</h5>
+                            <p class="mb-0 small">Ajuste os filtros ou adicione novos clientes à base.</p>
                         </td>
                     </tr>
                     {% endfor %}
@@ -157,98 +158,81 @@
     </div>
 </form>
 
-<!-- ==========================================
-     MODAL: IMPORTAR BASE (CSV)
-=========================================== -->
-<div class="modal fade" id="modalImportarCSV" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header bg-success text-white border-0">
-                <h5 class="modal-title fw-bold"><i class="fas fa-file-excel me-2"></i> Importar Clientes via CSV</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-4">
-                <form method="post" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    <input type="hidden" name="acao" value="importar_csv">
-                    
-                    <div class="mb-4">
-                        <label class="form-label text-muted small fw-bold">SELECIONE O ARQUIVO (.CSV)</label>
-                        <input class="form-control form-control-lg" type="file" name="arquivo_csv" accept=".csv" required>
-                        <small class="text-muted mt-2 d-block">O sistema irá ignorar IDs numéricos e focar nos nomes dos clientes.</small>
-                    </div>
-                    
-                    <div class="alert alert-info border-0 bg-info bg-opacity-10 small mb-4">
-                        <i class="fas fa-info-circle me-1"></i> <strong>Nota:</strong> Esta ação adiciona os clientes à <strong>Base Geral</strong>. Após importar, use os filtros acima para distribuí-los em carteiras ou rotas.
-                    </div>
-                    
-                    <button type="submit" class="btn btn-success w-100 fw-bold py-3 shadow-sm text-uppercase">
-                        Processar e Sincronizar
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ==========================================
-     MODAL: CADASTRO RÁPIDO (MANUAL)
-=========================================== -->
+<!-- MODAL: NOVO CLIENTE -->
 <div class="modal fade" id="modalNovoCliente" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header bg-light border-0">
-                <h5 class="modal-title fw-bold">
-                    <i class="fas fa-user-plus me-2" style="color: var(--sgb-orange);"></i> Cadastro Rápido
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-dark text-white border-0 rounded-top-4">
+                <h5 class="modal-title fw-bold text-uppercase small"><i class="fas fa-user-plus me-2 text-warning"></i> Adicionar Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <form method="post" action="{% url 'cadastrar_cliente' %}">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <label class="form-label text-muted small fw-bold">Nome Completo do Cliente *</label>
-                        <input type="text" name="nome" class="form-control form-control-lg fw-bold text-dark shadow-sm" required placeholder="Ex: Panificadora Alfa">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Nome / Razão Social *</label>
+                        <input type="text" name="nome" class="form-control fw-bold" required autofocus>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label text-muted small fw-bold">WhatsApp / Telefone</label>
-                            <input type="text" name="telefone" class="form-control shadow-sm" placeholder="85999999999">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Telefone (WhatsApp)</label>
+                        <input type="text" name="telefone" class="form-control">
+                    </div>
+                    <div class="row g-2 mb-4">
+                        <div class="col-7">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Endereço</label>
+                            <input type="text" name="endereco" class="form-control" placeholder="Ex: Rua X, 123">
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label text-muted small fw-bold">Bairro Principal *</label>
-                            <input type="text" name="bairro" class="form-control shadow-sm" required placeholder="Ex: Centro">
+                        <div class="col-5">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Bairro</label>
+                            <input type="text" name="bairro" class="form-control">
                         </div>
                     </div>
-                    <div class="mb-4">
-                        <label class="form-label text-muted small fw-bold">Endereço e Número</label>
-                        <input type="text" name="endereco" class="form-control shadow-sm" placeholder="Ex: Rua das Flores, 123">
-                    </div>
-                    <button type="submit" class="btn btn-dark w-100 fw-bold py-3 shadow-sm text-uppercase">
-                        Salvar na Base
-                    </button>
+                    <button type="submit" class="btn btn-primary w-100 fw-bold py-2 shadow-sm text-uppercase">Guardar Cliente</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
 
+<!-- MODAL: IMPORTAR BASE (Global) -->
+<div class="modal fade" id="modalImportarGlobal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-success text-white border-0 rounded-top-4">
+                <h5 class="modal-title fw-bold text-uppercase small"><i class="fas fa-file-csv me-2"></i> Importar Base de Dados</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="acao" value="importar_csv">
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning border-0 small bg-warning bg-opacity-10 text-dark">
+                        <i class="fas fa-info-circle me-2 text-warning"></i>
+                        O ficheiro deve ser um <strong>.CSV</strong>. Esta importação criará os clientes "soltos" na base geral. Para os atribuir diretamente, utilize a importação dentro da página "Carteiras".
+                    </div>
+                    <div class="mb-3 mt-4">
+                        <label class="form-label fw-bold text-muted small text-uppercase">Selecionar Ficheiro (.csv)</label>
+                        <input class="form-control" type="file" name="arquivo_csv" accept=".csv" required>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 rounded-bottom-4">
+                    <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success fw-bold px-4 shadow-sm" onclick="this.innerHTML='<i class=\'fas fa-spinner fa-spin me-2\'></i> A processar...'; this.classList.add('disabled');">
+                        <i class="fas fa-upload me-2"></i> Processar Base
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
-    /**
-     * Alternar todos os checkboxes da lista
-     */
-    function toggleChecks(source) {
-        const checkboxes = document.querySelectorAll('.client-check');
-        checkboxes.forEach(chk => {
-            chk.checked = source.checked;
-        });
+    // Selecionar todos os clientes da lista de uma vez
+    function toggleAll(source) {
+        checkboxes = document.querySelectorAll('.client-check');
+        for(var i=0, n=checkboxes.length;i<n;i++) {
+            checkboxes[i].checked = source.checked;
+        }
     }
 </script>
-
-<style>
-    .sticky-top { transition: all 0.3s ease; }
-    .table-hover tbody tr:hover { background-color: rgba(242, 101, 34, 0.03); }
-    .badge { font-weight: 700; letter-spacing: 0.3px; }
-</style>
-
 {% endblock %}

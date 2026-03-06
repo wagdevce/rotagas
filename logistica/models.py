@@ -13,6 +13,12 @@ class Cliente(models.Model):
     bairro = models.CharField(max_length=100, default="Não Informado")
     telefone = models.CharField(max_length=20)
     
+    # --- NOVOS CAMPOS DE CADASTRO ESTENDIDO ---
+    documento = models.CharField(max_length=20, blank=True, null=True, help_text="CPF ou CNPJ")
+    email = models.EmailField(max_length=255, blank=True, null=True)
+    observacoes_gerais = models.TextField(blank=True, null=True)
+    # ------------------------------------------
+    
     # GPS
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
