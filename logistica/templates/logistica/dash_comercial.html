@@ -1,44 +1,24 @@
 {% extends 'logistica/base.html' %}
 
 {% block content %}
-<!-- ESTILOS DAS ABAS SGB -->
+<!-- ESTILOS DAS ABAS E TABELAS -->
 <style>
-    .nav-pills .nav-link {
-        color: var(--sgb-black);
-        background-color: white;
-        transition: all 0.3s ease;
-    }
-    .nav-pills .nav-link:hover:not(.active) {
-        background-color: #f8f9fa;
-        transform: translateY(-2px);
-    }
-    .nav-pills .nav-link.active {
-        background-color: var(--sgb-orange) !important;
-        color: white !important;
-        border-color: var(--sgb-orange) !important;
-        box-shadow: 0 4px 10px rgba(242, 101, 34, 0.3) !important;
-    }
-    .table-hover tbody tr:hover {
-        background-color: rgba(242, 101, 34, 0.03);
-        transition: background-color 0.2s ease;
-    }
+    .nav-pills .nav-link { color: var(--sgb-black); background-color: white; transition: all 0.3s ease; }
+    .nav-pills .nav-link:hover:not(.active) { background-color: #f8f9fa; transform: translateY(-2px); }
+    .nav-pills .nav-link.active { background-color: var(--sgb-orange) !important; color: white !important; border-color: var(--sgb-orange) !important; box-shadow: 0 4px 10px rgba(242, 101, 34, 0.3) !important; }
+    .table-hover tbody tr:hover { background-color: rgba(242, 101, 34, 0.03); transition: background-color 0.2s ease; }
 </style>
 
 <!-- CABEÇALHO E MÉTRICAS -->
 <div class="row mb-4">
     <div class="col-12">
-        <h4 class="fw-bold mb-0 text-dark text-uppercase">
-            <i class="fas fa-headset me-2" style="color: var(--sgb-orange);"></i> Cockpit de Vendas
-        </h4>
+        <h4 class="fw-bold mb-0 text-dark text-uppercase"><i class="fas fa-headset me-2" style="color: var(--sgb-orange);"></i> Cockpit de Vendas</h4>
         <p class="text-muted">Prospeção ativa e recuperação de clientes.</p>
     </div>
 </div>
 
-<!-- ==========================================
-     MÉTRICAS DO DIA (KPIs)
-=========================================== -->
+<!-- KPIs -->
 <div class="row g-3 mb-4">
-    <!-- Meta Diária (Preto SGB) -->
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100" style="background-color: var(--sgb-black); color: white;">
             <div class="card-body text-center py-3">
@@ -48,8 +28,6 @@
             </div>
         </div>
     </div>
-    
-    <!-- Vendas Fechadas -->
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100" style="border-bottom: 4px solid #198754 !important;">
             <div class="card-body text-center py-3">
@@ -59,8 +37,6 @@
             </div>
         </div>
     </div>
-    
-    <!-- Recusas -->
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100" style="border-bottom: 4px solid #dc3545 !important;">
             <div class="card-body text-center py-3">
@@ -70,21 +46,17 @@
             </div>
         </div>
     </div>
-
-    <!-- Como funciona (Informativo) -->
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid var(--sgb-orange) !important;">
             <div class="card-body py-3 d-flex flex-column justify-content-center">
                 <small class="fw-bold text-dark text-uppercase mb-1"><i class="fas fa-bolt me-1 text-warning"></i> Auto-Despacho</small>
-                <small class="text-muted" style="font-size: 0.75rem; line-height: 1.2;">Ao clicar em <b>Vendeu</b>, a entrega é gerada instantaneamente no telemóvel do motoqueiro.</small>
+                <small class="text-muted" style="font-size: 0.75rem; line-height: 1.2;">Ao clicar em <b>Vendeu</b>, escolha o motoqueiro e a entrega vai direto para o telemóvel dele.</small>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ==========================================
-     NAVEGAÇÃO POR ABAS (FILA DE TRABALHO)
-=========================================== -->
+<!-- NAVEGAÇÃO POR ABAS -->
 <ul class="nav nav-pills mb-4 gap-2" id="pills-tab" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active fw-bold text-uppercase small px-4 rounded-pill border shadow-sm" id="pills-mailing-tab" data-bs-toggle="pill" data-bs-target="#pills-mailing" type="button" role="tab">
@@ -105,9 +77,7 @@
     </li>
 </ul>
 
-<!-- ==========================================
-     CONTEÚDO DAS ABAS
-=========================================== -->
+<!-- CONTEÚDO DAS ABAS -->
 <div class="tab-content" id="pills-tabContent">
     
     <!-- ABA 1: MAILING PRINCIPAL -->
@@ -127,11 +97,8 @@
                         <tr>
                             <td class="ps-4">
                                 <div class="fw-bold text-dark fs-6">{{ cliente.nome }}</div>
-                                
                                 <div class="d-flex align-items-center gap-2 mt-1">
                                     <span class="badge bg-light text-secondary border small">{{ cliente.bairro }}</span>
-                                    
-                                    <!-- Inteligência de Consumo (Tags) -->
                                     {% if cliente.is_virado %}
                                         <span class="badge bg-danger text-white border-0 small shadow-sm"><i class="fas fa-skull-crossbones me-1"></i> VIRADO (> {{ cliente.dias_desde_ultima_compra }}d)</span>
                                     {% elif cliente.is_atrasado %}
@@ -154,13 +121,14 @@
                             </td>
                             <td class="pe-4 text-end">
                                 <div class="d-flex gap-2 justify-content-end">
-                                    <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="resultado" value="VENDA_FECHADA">
-                                        <button type="submit" class="btn btn-success fw-bold px-3 shadow-sm">
-                                            <i class="fas fa-check me-1"></i> Vendeu
-                                        </button>
-                                    </form>
+                                    <!-- NOVO BOTÃO DE VENDA QUE ABRE O MODAL -->
+                                    <button type="button" class="btn btn-success fw-bold px-3 shadow-sm"
+                                            data-bs-toggle="modal" data-bs-target="#modalVendaComercial"
+                                            data-action="{% url 'registrar_ligacao' cliente.id %}"
+                                            data-nome="{{ cliente.nome }}">
+                                        <i class="fas fa-check me-1"></i> Vendeu
+                                    </button>
+                                    
                                     <button type="button" class="btn btn-outline-danger fw-bold shadow-sm"
                                             data-bs-toggle="modal" data-bs-target="#modalRecusaComercial"
                                             data-action="{% url 'registrar_ligacao' cliente.id %}"
@@ -180,9 +148,7 @@
                         {% empty %}
                         <tr>
                             <td colspan="3" class="text-center text-muted py-5">
-                                <div class="opacity-50 mb-3">
-                                    <i class="fas fa-check-circle fa-4x text-success"></i>
-                                </div>
+                                <div class="opacity-50 mb-3"><i class="fas fa-check-circle fa-4x text-success"></i></div>
                                 <h5 class="fw-bold text-dark">Mailing Finalizado!</h5>
                                 <p class="small mb-0">Todos os clientes desta lista já foram contactados hoje.</p>
                             </td>
@@ -194,7 +160,7 @@
         </div>
     </div>
 
-    <!-- ABA 2: RETORNOS AGENDADOS -->
+    <!-- ABA 2: RETORNOS -->
     <div class="tab-pane fade" id="pills-retornos" role="tabpanel">
         <div class="card border-0 shadow-sm mb-5" style="border-top: 4px solid #dc3545 !important; background-color: #fffafb;">
             <div class="table-responsive">
@@ -212,7 +178,6 @@
                             <td class="ps-4">
                                 <div class="fw-bold text-dark fs-6">{{ lig.cliente.nome }}</div>
                                 <span class="badge bg-light text-secondary border small">{{ lig.cliente.bairro }}</span>
-                                <!-- Contexto da última ligação -->
                                 <div class="mt-2 p-2 bg-white rounded border border-danger border-opacity-25 small text-dark shadow-sm d-inline-block">
                                     <i class="fas fa-info-circle text-danger me-1"></i> <strong>Nota Anterior:</strong> 
                                     <span class="text-muted fst-italic">{{ lig.observacao|default:"Nenhuma observação registada." }}</span>
@@ -223,21 +188,18 @@
                                     <a href="tel:{{ lig.cliente.telefone }}" class="fw-bold text-dark text-decoration-none">
                                         <i class="fas fa-phone-alt me-1 text-muted"></i> {{ lig.cliente.telefone }}
                                     </a>
-                                    <a href="https://wa.me/55{{ lig.cliente.telefone }}?text=Olá%20{{ lig.cliente.nome|urlencode }},%20estou%20a%20retornar%20o%20contacto%20como%20combinámos..." 
-                                       target="_blank" class="btn btn-sm btn-success py-1 px-3 fw-bold shadow-sm" style="font-size: 0.75rem; border-radius: 6px;">
-                                        <i class="fab fa-whatsapp me-1"></i> ZAP
-                                    </a>
                                 </div>
                             </td>
                             <td class="pe-4 text-end">
                                 <div class="d-flex gap-2 justify-content-end">
-                                    <form method="POST" action="{% url 'registrar_ligacao' lig.cliente.id %}" class="m-0">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="resultado" value="VENDA_FECHADA">
-                                        <button type="submit" class="btn btn-success fw-bold px-3 shadow-sm">
-                                            <i class="fas fa-check me-1"></i> Vendeu
-                                        </button>
-                                    </form>
+                                    <!-- NOVO BOTÃO DE VENDA PARA A ABA DE RETORNOS TAMBÉM -->
+                                    <button type="button" class="btn btn-success fw-bold px-3 shadow-sm"
+                                            data-bs-toggle="modal" data-bs-target="#modalVendaComercial"
+                                            data-action="{% url 'registrar_ligacao' lig.cliente.id %}"
+                                            data-nome="{{ lig.cliente.nome }}">
+                                        <i class="fas fa-check me-1"></i> Vendeu
+                                    </button>
+                                    
                                     <button type="button" class="btn btn-outline-danger fw-bold shadow-sm"
                                             data-bs-toggle="modal" data-bs-target="#modalRecusaComercial"
                                             data-action="{% url 'registrar_ligacao' lig.cliente.id %}"
@@ -259,13 +221,83 @@
                             <td colspan="3" class="text-center text-muted py-5">
                                 <i class="fas fa-calendar-check fa-4x mb-3 text-secondary opacity-25"></i>
                                 <h5 class="fw-bold text-dark">Fila Vazia!</h5>
-                                <p class="small mb-0">Você não tem ligações reagendadas para o dia de hoje.</p>
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     MODAL DE VENDA (DESPACHO DIRETO)
+=========================================== -->
+<div class="modal fade" id="modalVendaComercial" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title fw-bold text-uppercase small"><i class="fas fa-motorcycle me-2"></i> Despachar Entrega</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <form method="post" id="formVendaComercial">
+                {% csrf_token %}
+                <input type="hidden" name="resultado" value="VENDA_FECHADA">
+                
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-4">A faturar: <strong id="nomeVendaModal" class="text-dark fs-6"></strong></p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-dark">1. Quem vai entregar? *</label>
+                        <select name="motoqueiro_id" class="form-select bg-light border-0 fw-bold text-primary" required>
+                            <option value="" disabled selected>Escolha o motoqueiro...</option>
+                            {% for m in motoqueiros %}
+                                <option value="{{ m.id }}">{{ m.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-dark">2. Valor a Cobrar (R$) *</label>
+                            <input type="number" step="0.01" name="valor_venda" class="form-control bg-light border-0 fw-bold text-success fs-5" placeholder="105,00" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-dark">3. Pagamento *</label>
+                            <select name="forma_pagamento" class="form-select bg-light border-0" required>
+                                <option value="Dinheiro">Dinheiro</option>
+                                <option value="PIX">PIX</option>
+                                <option value="Cartão">Cartão (Máquina)</option>
+                                <option value="Fiado">Fiado (Anotar)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-dark">4. Qual é a cor do botijão seco (Casco)? *</label>
+                        <select name="tipo_botijao" class="form-select bg-light border-0" required>
+                            <option value="" disabled selected>Escolha a marca...</option>
+                            <option value="Azul (Ultragaz)">Azul (Ultragaz)</option>
+                            <option value="Prata (Liquigás)">Prata (Liquigás)</option>
+                            <option value="Dourado (Nacional)">Dourado (Nacional)</option>
+                            <option value="Verde (Copagaz)">Verde (Copagaz)</option>
+                            <option value="Qualquer/Não Sabe">Qualquer / Não Sabe</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-muted">Aviso para o Motoqueiro (Opcional)</label>
+                        <textarea name="observacao" class="form-control bg-light border-0 shadow-sm" rows="2" placeholder="Ex: Levar troco para 150..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="modal-footer bg-light border-0">
+                    <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success fw-bold px-4 shadow-sm"><i class="fas fa-paper-plane me-2"></i> Despachar</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -283,11 +315,9 @@
             
             <form method="post" id="formRecusaComercial">
                 {% csrf_token %}
-                
                 <div class="modal-body p-4">
                     <p class="text-muted small mb-4">A registar nota para: <strong id="nomeClienteModal" class="text-dark fs-6"></strong></p>
                     
-                    <!-- Escolha da Ação -->
                     <label class="form-label small fw-bold text-dark text-uppercase">O que o cliente respondeu?</label>
                     <div class="d-flex gap-2 mb-4">
                         <input type="radio" class="btn-check" name="resultado" id="opt_recusa" value="RECUSA" checked onchange="toggleAgendamento()">
@@ -297,13 +327,11 @@
                         <label class="btn btn-outline-primary w-50 fw-bold py-2" for="opt_reagendar">Ligar Depois</label>
                     </div>
 
-                    <!-- Bloco de Reagendamento (Oculto por padrão) -->
                     <div id="bloco_agendamento" class="d-none mb-3 p-3 bg-light rounded border border-primary border-opacity-25 shadow-sm">
                         <label class="form-label small fw-bold text-primary text-uppercase"><i class="far fa-calendar-alt me-1"></i> Agendar Retorno para:</label>
                         <input type="date" name="data_agendamento" id="data_agendamento_input" class="form-control fw-bold text-dark">
                     </div>
 
-                    <!-- Observação (Obrigatória se agendar) -->
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-muted text-uppercase">Notas da Conversa</label>
                         <textarea name="observacao" class="form-control bg-light border-0 shadow-sm" rows="3" placeholder="Ex: Achou caro, comprou da Nacional... ou Pediu para ligar na sexta à tarde."></textarea>
@@ -312,7 +340,6 @@
                 
                 <div class="modal-footer bg-light border-0">
                     <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <!-- Botão de submissão alinhado à marca (Preto) -->
                     <button type="submit" class="btn btn-dark fw-bold px-4 shadow-sm" style="background-color: var(--sgb-black);">Salvar Registo</button>
                 </div>
             </form>
@@ -321,29 +348,34 @@
 </div>
 
 <script>
-    //  Script para injetar o ID do cliente no Modal
+    // 1. Injetar dados no Modal de Recusa
     const modalRecusa = document.getElementById('modalRecusaComercial');
     if (modalRecusa) {
         modalRecusa.addEventListener('show.bs.modal', function (event) {
             const button = event.relatedTarget;
-            const actionUrl = button.getAttribute('data-action');
-            const clienteNome = button.getAttribute('data-nome');
+            document.getElementById('formRecusaComercial').action = button.getAttribute('data-action');
+            document.getElementById('nomeClienteModal').textContent = button.getAttribute('data-nome');
             
-            document.getElementById('formRecusaComercial').action = actionUrl;
-            document.getElementById('nomeClienteModal').textContent = clienteNome;
-            
-            // Resetar o modal sempre que abre
             document.getElementById('opt_recusa').checked = true;
             toggleAgendamento();
         });
     }
 
-    // Script para alternar o campo de data
+    // 2. Injetar dados no Modal de Venda
+    const modalVenda = document.getElementById('modalVendaComercial');
+    if (modalVenda) {
+        modalVenda.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            document.getElementById('formVendaComercial').action = button.getAttribute('data-action');
+            document.getElementById('nomeVendaModal').textContent = button.getAttribute('data-nome');
+        });
+    }
+
+    // 3. Alternar exibição de Agendamento
     function toggleAgendamento() {
         const isReagendar = document.getElementById('opt_reagendar').checked;
         const blocoData = document.getElementById('bloco_agendamento');
         const inputData = document.getElementById('data_agendamento_input');
-        
         if (isReagendar) {
             blocoData.classList.remove('d-none');
             inputData.required = true;
