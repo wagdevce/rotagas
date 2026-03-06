@@ -117,12 +117,13 @@
 =========================================== -->
 <div class="row g-4">
     
-    <!-- COLUNA 1: CLIENTES DISPONÍVEIS (SEM CARTEIRA) -->
+    <!-- COLUNA 1: CLIENTES DISPONÍVEIS -->
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white border-bottom pt-3 pb-2 d-flex justify-content-between align-items-center">
                 <h6 class="fw-bold text-uppercase small text-muted mb-0">
-                    <i class="fas fa-users-slash me-2"></i> Clientes Sem Carteira
+                    <!-- Título Atualizado -->
+                    <i class="fas fa-users-slash me-2"></i> Clientes Disponíveis
                 </h6>
                 <span class="badge bg-secondary">{{ clientes_livres.count }}</span>
             </div>
@@ -133,7 +134,8 @@
                     <input type="hidden" name="acao" value="adicionar_clientes">
                     
                     <div class="p-3 bg-light border-bottom">
-                        <input type="text" id="buscaLivres" class="form-control form-control-sm" placeholder="Pesquisar cliente livre..." onkeyup="filtrarLista('buscaLivres', 'listaLivres')">
+                        <!-- Texto Atualizado -->
+                        <input type="text" id="buscaLivres" class="form-control form-control-sm" placeholder="Pesquisar cliente disponível..." onkeyup="filtrarLista('buscaLivres', 'listaLivres')">
                     </div>
                     
                     <div class="list-group list-group-flush overflow-auto" id="listaLivres" style="max-height: 500px;">
@@ -152,7 +154,8 @@
                         {% empty %}
                         <div class="p-5 text-center text-muted">
                             <i class="fas fa-check-circle fa-3x mb-3 text-success opacity-50"></i>
-                            <p class="mb-0 small fw-bold">Todos os clientes já possuem carteira!</p>
+                            <!-- Mensagem de Vazio Atualizada -->
+                            <p class="mb-0 small fw-bold">Todos os clientes já estão nesta carteira!</p>
                         </div>
                         {% endfor %}
                     </div>

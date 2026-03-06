@@ -600,10 +600,10 @@ def detalhes_carteira(request, id_carteira):
         'carteira': carteira, 
         'clientes': carteira.clientes.all().order_by('bairro', 'nome'),
         'usuarios': User.objects.filter(is_active=True).order_by('username'),
-        'clientes_livres': Cliente.objects.filter(carteiras__isnull=True).order_by('bairro', 'nome')
+        # AQUI ESTÁ A MÁGICA: Em vez de 'isnull=True', usamos 'exclude(carteiras=carteira)'
+        'clientes_livres': Cliente.objects.exclude(carteiras=carteira).order_by('bairro', 'nome')
     }
     return render(request, 'logistica/detalhes_carteira.html', context)
-
 
 # ==============================================================================
 # PERFIL E CRM (GERENCIAMENTO INDIVIDUAL DO CLIENTE)
