@@ -1,0 +1,224 @@
+{% extends 'logistica/base.html' %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="javascript:history.back()" class="text-decoration-none text-muted fw-bold text-uppercase small">
+        <i class="fas fa-arrow-left me-1"></i> Voltar
+    </a>
+</div>
+
+<!-- CABEÇALHO DO CLIENTE -->
+<div class="card border-0 shadow-sm mb-4" style="border-top: 4px solid var(--sgb-orange) !important;">
+    <div class="card-body p-4 d-flex justify-content-between align-items-center">
+        <div>
+            <h3 class="fw-bold mb-1 text-dark">{{ cliente.nome }}</h3>
+            <span class="badge bg-light text-secondary border font-monospace me-2">ID: #{{ cliente.id }}</span>
+            {% for tag in cliente.tags_visuais %}
+                <span class="badge bg-{{ tag.cor }}"><i class="fas {{ tag.icone }} me-1"></i> {{ tag.texto }}</span>
+            {% empty %}
+                <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Base Ativa</span>
+            {% endfor %}
+        </div>
+        <div class="text-end">
+            <small class="text-muted text-uppercase fw-bold d-block">Saldo Devedor</small>
+            <h3 class="fw-bold {% if cliente.divida_atual > 0 %}text-danger{% else %}text-success{% endif %} mb-0">
+                R$ {{ cliente.divida_atual }}
+            </h3>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- COLUNA ESQUERDA: FORMULÁRIO DE EDIÇÃO -->
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-bottom pt-4 pb-3">
+                <h6 class="fw-bold text-uppercase mb-0 text-dark">
+                    <i class="fas fa-user-edit me-2 text-primary"></i> Ficha de Cadastro
+                </h6>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="editar">
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Nome / Razão Social *</label>
+                        <input type="text" name="nome" class="form-control fw-bold" value="{{ cliente.nome }}" required>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Telefone / WhatsApp *</label>
+                            <input type="text" name="telefone" class="form-control" value="{{ cliente.telefone }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase">CPF / CNPJ</label>
+                            <input type="text" name="documento" class="form-control" value="{{ cliente.documento|default:'' }}" placeholder="Opcional">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">E-mail</label>
+                        <input type="email" name="email" class="form-control" value="{{ cliente.email|default:'' }}" placeholder="cliente@email.com">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Bairro *</label>
+                        <input type="text" name="bairro" class="form-control" value="{{ cliente.bairro }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Endereço Completo *</label>
+                        <input type="text" name="endereco" class="form-control" value="{{ cliente.endereco }}" required>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Observações Internas</label>
+                        <textarea name="observacoes_gerais" class="form-control bg-light" rows="3" placeholder="Ponto de referência, preferências do cliente...">{{ cliente.observacoes_gerais|default:'' }}</textarea>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-dark fw-bold py-2 shadow-sm text-uppercase">
+                            <i class="fas fa-save me-2"></i> Salvar Alterações
+                        </button>
+                        
+                        <!-- BOTÃO APAGAR (ABRE MODAL) -->
+                        <button type="button" class="btn btn-outline-danger fw-bold py-2 mt-3" data-bs-toggle="modal" data-bs-target="#modalExcluirCliente">
+                            <i class="fas fa-trash-alt me-2"></i> Excluir Cliente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- COLUNA DIREITA: HISTÓRICO DE CRM -->
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-bottom pt-3 pb-0">
+                <!-- TABS DE HISTÓRICO -->
+                <ul class="nav nav-tabs border-0" id="crmTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold text-uppercase small text-dark border-0 border-bottom border-3 border-dark" id="entregas-tab" data-bs-toggle="tab" data-bs-target="#entregas" type="button" role="tab">
+                            <i class="fas fa-motorcycle me-1"></i> Entregas
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold text-uppercase small text-muted border-0" id="ligacoes-tab" data-bs-toggle="tab" data-bs-target="#ligacoes" type="button" role="tab" onclick="this.classList.add('border-bottom', 'border-3', 'border-dark', 'text-dark'); document.getElementById('entregas-tab').classList.remove('border-bottom', 'border-3', 'border-dark', 'text-dark');">
+                            <i class="fas fa-headset me-1"></i> Ligações
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="card-body p-0">
+                <div class="tab-content" id="crmTabsContent">
+                    
+                    <!-- TAB: ENTREGAS -->
+                    <div class="tab-pane fade show active" id="entregas" role="tabpanel">
+                        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light sticky-top">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4 py-3">Data</th>
+                                        <th>Motoqueiro</th>
+                                        <th>Status / Motivo</th>
+                                        <th class="text-end pe-4">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for v in historico_visitas %}
+                                    <tr>
+                                        <td class="ps-4 small font-monospace">{{ v.data_visita|date:"d/m/y H:i" }}</td>
+                                        <td class="fw-bold small">{{ v.rota.motoqueiro.username }}</td>
+                                        <td>
+                                            {% if v.status == 'REALIZADA' %}
+                                                <span class="badge bg-success bg-opacity-10 text-success border border-success">Sucesso</span>
+                                            {% else %}
+                                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">{{ v.get_motivo_nao_venda_display|default:"Não Vendeu" }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-end pe-4 fw-bold {% if v.valor_recebido > 0 %}text-success{% else %}text-muted{% endif %}">
+                                            R$ {{ v.valor_recebido }}
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="4" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-2x mb-2 opacity-25"></i><br>Nenhuma entrega registada.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- TAB: LIGAÇÕES -->
+                    <div class="tab-pane fade" id="ligacoes" role="tabpanel">
+                        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light sticky-top">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4 py-3">Data</th>
+                                        <th>Operador</th>
+                                        <th>Desfecho</th>
+                                        <th class="pe-4">Observação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for lig in historico_ligacoes %}
+                                    <tr>
+                                        <td class="ps-4 small font-monospace">{{ lig.data_ligacao|date:"d/m/y H:i" }}</td>
+                                        <td class="fw-bold small">{{ lig.agente.username }}</td>
+                                        <td>
+                                            {% if lig.resultado == 'VENDA_FECHADA' %}
+                                                <span class="badge bg-success">Vendeu</span>
+                                            {% elif lig.resultado == 'RECUSA' %}
+                                                <span class="badge bg-danger">Recusa</span>
+                                            {% elif lig.resultado == 'REAGENDADO' %}
+                                                <span class="badge bg-primary">Retorno</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">S/ Atender</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="pe-4 small text-muted fst-italic">{{ lig.observacao|default:"-" }}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="4" class="text-center py-5 text-muted"><i class="fas fa-phone-slash fa-2x mb-2 opacity-25"></i><br>Nenhum contacto telefónico.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     MODAL DE EXCLUSÃO (SEGURANÇA)
+=========================================== -->
+<div class="modal fade" id="modalExcluirCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-danger text-white border-0 rounded-top-4">
+                <h5 class="modal-title fw-bold text-uppercase small"><i class="fas fa-exclamation-triangle me-2"></i> Excluir Permanentemente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 text-center">
+                <i class="fas fa-user-times fa-4x text-danger opacity-50 mb-3"></i>
+                <h4 class="fw-bold text-dark mb-1">Tem a certeza absoluta?</h4>
+                <p class="text-muted mb-4">Está prestes a excluir o cliente <strong>{{ cliente.nome }}</strong>. Todo o histórico de visitas, pagamentos e ligações associado a este cliente será apagado do sistema.</p>
+            </div>
+            <div class="modal-footer border-0 bg-light rounded-bottom-4 justify-content-center gap-2 p-3">
+                <button type="button" class="btn btn-outline-secondary px-4 fw-bold rounded-3" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" class="m-0">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="excluir">
+                    <button type="submit" class="btn btn-danger px-4 fw-bold shadow-sm rounded-3">Sim, Excluir Cliente</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
