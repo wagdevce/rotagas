@@ -295,7 +295,10 @@
                 
                 <div class="modal-footer bg-light border-0">
                     <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success fw-bold px-4 shadow-sm"><i class="fas fa-paper-plane me-2"></i> Despachar</button>
+                    <!-- Botão alterado com o ID para controlo no JS -->
+                    <button type="submit" id="btnDespachar" class="btn btn-success fw-bold px-4 shadow-sm">
+                        <i class="fas fa-paper-plane me-2"></i> Despachar
+                    </button>
                 </div>
             </form>
         </div>
@@ -340,7 +343,10 @@
                 
                 <div class="modal-footer bg-light border-0">
                     <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-dark fw-bold px-4 shadow-sm" style="background-color: var(--sgb-black);">Salvar Registo</button>
+                    <!-- Botão alterado com o ID para controlo no JS -->
+                    <button type="submit" id="btnSalvarRegisto" class="btn btn-dark fw-bold px-4 shadow-sm" style="background-color: var(--sgb-black);">
+                        <i class="fas fa-save me-2"></i> Salvar Registo
+                    </button>
                 </div>
             </form>
         </div>
@@ -385,5 +391,40 @@
             inputData.value = '';
         }
     }
+
+    // 4. PREVENÇÃO DE DUPLO CLIQUE (Blindagem de Formulários)
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // Blindagem do Formulário de Venda
+        const formVenda = document.getElementById('formVendaComercial');
+        const btnDespachar = document.getElementById('btnDespachar');
+        
+        if (formVenda && btnDespachar) {
+            formVenda.addEventListener('submit', function() {
+                // Apenas bloqueia se o formulário for válido (se todos os "required" estiverem preenchidos)
+                if(formVenda.checkValidity()) {
+                    btnDespachar.classList.add('disabled');
+                    btnDespachar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> A processar...';
+                    // Evitar múltiplos submits caso o form seja muito grande e o utilizador carregue no 'Enter' várias vezes
+                    setTimeout(function() { btnDespachar.disabled = true; }, 50); 
+                }
+            });
+        }
+
+        // Blindagem do Formulário de Recusa
+        const formRecusa = document.getElementById('formRecusaComercial');
+        const btnSalvarRegisto = document.getElementById('btnSalvarRegisto');
+        
+        if (formRecusa && btnSalvarRegisto) {
+            formRecusa.addEventListener('submit', function() {
+                if(formRecusa.checkValidity()) {
+                    btnSalvarRegisto.classList.add('disabled');
+                    btnSalvarRegisto.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> A guardar...';
+                    setTimeout(function() { btnSalvarRegisto.disabled = true; }, 50);
+                }
+            });
+        }
+    });
+
 </script>
 {% endblock %}

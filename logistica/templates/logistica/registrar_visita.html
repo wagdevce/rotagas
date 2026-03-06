@@ -200,6 +200,26 @@
         }
     }
 
+    // 4. PREVENÇÃO DE DUPLO CLIQUE (Nova Implementação)
+    const formVisita = document.getElementById('formVisita');
+    const btnSalvar = document.getElementById('btnSalvar');
+
+    if (formVisita && btnSalvar) {
+        formVisita.addEventListener('submit', function(e) {
+            // Verifica a validade nativa do HTML antes de bloquear o botão
+            if(formVisita.checkValidity()) {
+                btnSalvar.classList.add('disabled');
+                // Muda a cor e o texto do botão para indicar processamento
+                btnSalvar.style.backgroundColor = '#6c757d'; 
+                btnSalvar.style.borderColor = '#6c757d';
+                btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> A enviar para a base...';
+                
+                // Desativa efetivamente o botão com um pequeno delay para garantir que o formulário é enviado primeiro
+                setTimeout(function() { btnSalvar.disabled = true; }, 50);
+            }
+        });
+    }
+
     // Inicia tudo assim que a página é carregada
     window.onload = function() {
         capturarGPS();
