@@ -118,7 +118,7 @@ def registrar_visita(request, id_visita):
             valor = converter_valor(request.POST.get('valor_recebido'))
             visita.status = STATUS_REALIZADA
             visita.valor_recebido = valor
-            visita.cliente.divida_atual -= valor
+            # O abatimento da dívida foi removido na V1.3
             visita.cliente.save()
             
             # Atualiza o robô de previsão de compras
@@ -190,17 +190,21 @@ def dash_comercial(request):
         'meta_diaria': 400
     }
 
-    # Passa as variáveis CORRETAS para o HTML das Abas
+    # ENVIAR MOTOQUEIROS PARA O MODAL (Corrige o erro do dropdown vazio)
+    motoqueiros = User.objects.filter(is_staff=False, is_superuser=False, is_active=True).order_by('username')
+
+    # Passa as variáveis CORRETAS para o HTML das Abas e Modais
     return render(request, 'logistica/dash_comercial.html', {
         'clientes_principais': clientes_principais,
         'lista_retornos': lista_retornos,
-        'metricas': metricas
+        'metricas': metricas,
+        'motoqueiros': motoqueiros
     })
 
 @login_required
 @transaction.atomic
 def registrar_ligacao(request, cliente_id):
-    """Processa o clique rápido de prospecção."""
+    """Processa o clique rápido de prospecção e Despacho Direto."""
     if request.method == 'POST':
         cliente = get_object_or_404(Cliente, pk=cliente_id)
         resultado = request.POST.get('resultado')
@@ -224,11 +228,15 @@ def registrar_ligacao(request, cliente_id):
         )
 
         if resultado == 'VENDA_FECHADA':
-            # Mágica de Automação: Envia a rota para o motoqueiro
-            carteira = cliente.carteiras.first()
-            motoqueiro = carteira.motoqueiro if carteira else None
+            # --- NOVO FLUXO: DESPACHO DIRECIONAL COM VALORES ---
+            motoqueiro_id = request.POST.get('motoqueiro_id')
             
-            if motoqueiro:
+            if motoqueiro_id:
+                motoqueiro = get_object_or_404(User, id=motoqueiro_id)
+                valor_venda = converter_valor(request.POST.get('valor_venda'))
+                forma_pagamento = request.POST.get('forma_pagamento', '')
+                tipo_botijao = request.POST.get('tipo_botijao', '')
+                
                 hoje = timezone.now().date()
                 rota, _ = Rota.objects.get_or_create(
                     motoqueiro=motoqueiro, 
@@ -239,11 +247,14 @@ def registrar_ligacao(request, cliente_id):
                     rota=rota, 
                     cliente=cliente, 
                     status=STATUS_PENDENTE,
+                    valor_venda=valor_venda,
+                    forma_pagamento=forma_pagamento,
+                    tipo_botijao=tipo_botijao,
                     observacao=f"Venda Telemarketing ({request.user.username}): {obs}"
                 )
-                messages.success(request, f"Venda fechada! {motoqueiro.username} recebeu a entrega no app.")
+                messages.success(request, f"Venda despachada para o motoqueiro {motoqueiro.username}!")
             else:
-                messages.warning(request, "Venda registada, mas cliente sem motoqueiro atribuído na carteira.")
+                messages.error(request, "Erro: Tem de selecionar o Motoqueiro para despachar.")
         else:
             messages.info(request, f"Contacto registado: {resultado.replace('_', ' ')}")
 
