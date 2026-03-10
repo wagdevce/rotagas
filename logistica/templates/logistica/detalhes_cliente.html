@@ -19,12 +19,16 @@
                 <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Base Ativa</span>
             {% endfor %}
         </div>
+        
+        <!-- Ocultado o Saldo se for zero (Regra de V1.3) -->
+        {% if cliente.divida_atual > 0 %}
         <div class="text-end">
             <small class="text-muted text-uppercase fw-bold d-block">Saldo Devedor</small>
-            <h3 class="fw-bold {% if cliente.divida_atual > 0 %}text-danger{% else %}text-success{% endif %} mb-0">
+            <h3 class="fw-bold text-danger mb-0">
                 R$ {{ cliente.divida_atual }}
             </h3>
         </div>
+        {% endif %}
     </div>
 </div>
 
@@ -97,19 +101,29 @@
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white border-bottom pt-3 pb-0">
-                <!-- TABS DE HISTÓRICO -->
+                <!-- FIX UAT: TABS DE HISTÓRICO CORRIGIDAS -->
                 <ul class="nav nav-tabs border-0" id="crmTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active fw-bold text-uppercase small text-dark border-0 border-bottom border-3 border-dark" id="entregas-tab" data-bs-toggle="tab" data-bs-target="#entregas" type="button" role="tab">
+                        <button class="nav-link active fw-bold text-uppercase small border-0" id="entregas-tab" data-bs-toggle="tab" data-bs-target="#entregas" type="button" role="tab">
                             <i class="fas fa-motorcycle me-1"></i> Entregas
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link fw-bold text-uppercase small text-muted border-0" id="ligacoes-tab" data-bs-toggle="tab" data-bs-target="#ligacoes" type="button" role="tab" onclick="this.classList.add('border-bottom', 'border-3', 'border-dark', 'text-dark'); document.getElementById('entregas-tab').classList.remove('border-bottom', 'border-3', 'border-dark', 'text-dark');">
+                        <button class="nav-link fw-bold text-uppercase small border-0" id="ligacoes-tab" data-bs-toggle="tab" data-bs-target="#ligacoes" type="button" role="tab">
                             <i class="fas fa-headset me-1"></i> Ligações
                         </button>
                     </li>
                 </ul>
+                <style>
+                    /* Estilização nativa e limpa para garantir que o utilizador sabe onde está */
+                    #crmTabs .nav-link { color: #6c757d; }
+                    #crmTabs .nav-link:hover { color: var(--sgb-black); }
+                    #crmTabs .nav-link.active {
+                        color: var(--sgb-orange) !important;
+                        border-bottom: 3px solid var(--sgb-orange) !important;
+                        background-color: transparent;
+                    }
+                </style>
             </div>
             
             <div class="card-body p-0">

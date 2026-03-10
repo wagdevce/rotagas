@@ -121,24 +121,21 @@
                             </td>
                             <td class="pe-4 text-end">
                                 <div class="d-flex gap-2 justify-content-end">
-                                    <!-- NOVO BOTÃO DE VENDA QUE ABRE O MODAL -->
-                                    <button type="button" class="btn btn-success fw-bold px-3 shadow-sm"
-                                            data-bs-toggle="modal" data-bs-target="#modalVendaComercial"
-                                            data-action="{% url 'registrar_ligacao' cliente.id %}"
-                                            data-nome="{{ cliente.nome }}">
+                                    <!-- Botão Vendeu -->
+                                    <button type="button" class="btn btn-success fw-bold px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalVendaComercial" data-action="{% url 'registrar_ligacao' cliente.id %}" data-nome="{{ cliente.nome }}">
                                         <i class="fas fa-check me-1"></i> Vendeu
                                     </button>
                                     
-                                    <button type="button" class="btn btn-outline-danger fw-bold shadow-sm"
-                                            data-bs-toggle="modal" data-bs-target="#modalRecusaComercial"
-                                            data-action="{% url 'registrar_ligacao' cliente.id %}"
-                                            data-nome="{{ cliente.nome }}">
+                                    <!-- Botão Ação/Recusa -->
+                                    <button type="button" class="btn btn-outline-danger fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalRecusaComercial" data-action="{% url 'registrar_ligacao' cliente.id %}" data-nome="{{ cliente.nome }}">
                                         <i class="fas fa-times"></i> Ação
                                     </button>
-                                    <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0">
+                                    
+                                    <!-- Botão Sem Atender (Com Confirmação UAT) -->
+                                    <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0 formSemAtender" onsubmit="return confirm('Marcar como Caixa Postal / Sem Atender? O cliente sairá da lista de hoje.');">
                                         {% csrf_token %}
                                         <input type="hidden" name="resultado" value="CAIXA_POSTAL">
-                                        <button type="submit" class="btn btn-outline-secondary fw-bold shadow-sm" title="Sem Atender">
+                                        <button type="submit" class="btn btn-outline-secondary fw-bold shadow-sm btnSubmitRapido" title="Sem Atender">
                                             <i class="fas fa-voicemail"></i>
                                         </button>
                                     </form>
@@ -188,28 +185,28 @@
                                     <a href="tel:{{ lig.cliente.telefone }}" class="fw-bold text-dark text-decoration-none">
                                         <i class="fas fa-phone-alt me-1 text-muted"></i> {{ lig.cliente.telefone }}
                                     </a>
+                                    <!-- Botão ZAP nos retornos (UAT Fix) -->
+                                    <a href="https://wa.me/55{{ lig.cliente.telefone }}?text=Olá%20{{ lig.cliente.nome|urlencode }},%20tínhamos%20combinado%20de%20falar%20hoje..." 
+                                       target="_blank" class="btn btn-sm btn-success py-1 px-3 fw-bold shadow-sm" style="font-size: 0.75rem; border-radius: 6px;">
+                                        <i class="fab fa-whatsapp me-1"></i> ZAP
+                                    </a>
                                 </div>
                             </td>
                             <td class="pe-4 text-end">
                                 <div class="d-flex gap-2 justify-content-end">
-                                    <!-- NOVO BOTÃO DE VENDA PARA A ABA DE RETORNOS TAMBÉM -->
-                                    <button type="button" class="btn btn-success fw-bold px-3 shadow-sm"
-                                            data-bs-toggle="modal" data-bs-target="#modalVendaComercial"
-                                            data-action="{% url 'registrar_ligacao' lig.cliente.id %}"
-                                            data-nome="{{ lig.cliente.nome }}">
+                                    <button type="button" class="btn btn-success fw-bold px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalVendaComercial" data-action="{% url 'registrar_ligacao' lig.cliente.id %}" data-nome="{{ lig.cliente.nome }}">
                                         <i class="fas fa-check me-1"></i> Vendeu
                                     </button>
                                     
-                                    <button type="button" class="btn btn-outline-danger fw-bold shadow-sm"
-                                            data-bs-toggle="modal" data-bs-target="#modalRecusaComercial"
-                                            data-action="{% url 'registrar_ligacao' lig.cliente.id %}"
-                                            data-nome="{{ lig.cliente.nome }}">
+                                    <button type="button" class="btn btn-outline-danger fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalRecusaComercial" data-action="{% url 'registrar_ligacao' lig.cliente.id %}" data-nome="{{ lig.cliente.nome }}">
                                         <i class="fas fa-times"></i> Ação
                                     </button>
-                                    <form method="POST" action="{% url 'registrar_ligacao' lig.cliente.id %}" class="m-0">
+                                    
+                                    <!-- Botão Sem Atender nos Retornos -->
+                                    <form method="POST" action="{% url 'registrar_ligacao' lig.cliente.id %}" class="m-0 formSemAtender" onsubmit="return confirm('Marcar como Caixa Postal / Sem Atender? O cliente sairá da lista de hoje.');">
                                         {% csrf_token %}
                                         <input type="hidden" name="resultado" value="CAIXA_POSTAL">
-                                        <button type="submit" class="btn btn-outline-secondary fw-bold shadow-sm" title="Ainda não atende">
+                                        <button type="submit" class="btn btn-outline-secondary fw-bold shadow-sm btnSubmitRapido" title="Ainda não atende">
                                             <i class="fas fa-voicemail"></i>
                                         </button>
                                     </form>
@@ -295,7 +292,7 @@
                 
                 <div class="modal-footer bg-light border-0">
                     <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <!-- Botão alterado com o ID para controlo no JS -->
+                    <!-- Identificador ID adicionado para o JavaScript -->
                     <button type="submit" id="btnDespachar" class="btn btn-success fw-bold px-4 shadow-sm">
                         <i class="fas fa-paper-plane me-2"></i> Despachar
                     </button>
@@ -343,7 +340,7 @@
                 
                 <div class="modal-footer bg-light border-0">
                     <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <!-- Botão alterado com o ID para controlo no JS -->
+                    <!-- Identificador ID adicionado para o JavaScript -->
                     <button type="submit" id="btnSalvarRegisto" class="btn btn-dark fw-bold px-4 shadow-sm" style="background-color: var(--sgb-black);">
                         <i class="fas fa-save me-2"></i> Salvar Registo
                     </button>
@@ -353,6 +350,9 @@
     </div>
 </div>
 
+<!-- ==========================================
+     SCRIPTS DE FUNCIONAMENTO
+=========================================== -->
 <script>
     // 1. Injetar dados no Modal de Recusa
     const modalRecusa = document.getElementById('modalRecusaComercial');
@@ -362,6 +362,7 @@
             document.getElementById('formRecusaComercial').action = button.getAttribute('data-action');
             document.getElementById('nomeClienteModal').textContent = button.getAttribute('data-nome');
             
+            // Reseta para o padrão sempre que o modal abre
             document.getElementById('opt_recusa').checked = true;
             toggleAgendamento();
         });
@@ -392,7 +393,7 @@
         }
     }
 
-    // 4. PREVENÇÃO DE DUPLO CLIQUE (Blindagem de Formulários)
+    // 4. PREVENÇÃO DE DUPLO CLIQUE E FEEDBACK VISUAL (Blindagem de Formulários)
     document.addEventListener("DOMContentLoaded", function() {
         
         // Blindagem do Formulário de Venda
@@ -401,11 +402,10 @@
         
         if (formVenda && btnDespachar) {
             formVenda.addEventListener('submit', function() {
-                // Apenas bloqueia se o formulário for válido (se todos os "required" estiverem preenchidos)
+                // Apenas bloqueia se o formulário for válido (passar nos 'required')
                 if(formVenda.checkValidity()) {
                     btnDespachar.classList.add('disabled');
                     btnDespachar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> A processar...';
-                    // Evitar múltiplos submits caso o form seja muito grande e o utilizador carregue no 'Enter' várias vezes
                     setTimeout(function() { btnDespachar.disabled = true; }, 50); 
                 }
             });
@@ -424,7 +424,20 @@
                 }
             });
         }
-    });
 
+        // Blindagem dos botões rápidos de "Sem Atender"
+        const formsRapidos = document.querySelectorAll('.formSemAtender');
+        formsRapidos.forEach(form => {
+            form.addEventListener('submit', function() {
+                const btn = form.querySelector('.btnSubmitRapido');
+                if (btn) {
+                    btn.classList.add('disabled');
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    setTimeout(function() { btn.disabled = true; }, 50);
+                }
+            });
+        });
+
+    });
 </script>
 {% endblock %}
