@@ -249,7 +249,7 @@
                 }
             });
         } else if (canvasConversion) {
-            canvasConversion.parentElement.innerHTML = '<div class="text-center text-muted opacity-50 pt-5"><i class="fas fa-chart-pie fa-3x mb-2"></i><p class="fw-bold">Sem entregas no período</p></div>';
+            canvasConversion.parentElement.innerHTML = '<div class="text-center text-muted opacity-50 pt-5"><i class="fas fa-chart-pie fa-3x mb-2"><\/i><p class="fw-bold">Sem entregas no período<\/p><\/div>';
         }
 
         // ----------------------------------------------------
@@ -257,8 +257,7 @@
         // ----------------------------------------------------
         const canvasLoss = document.getElementById('lossChart');
         if (canvasLoss) {
-            // Função robusta que tenta analisar os dados, independentemente de ser 
-            // JSON válido ("[]") ou representação crua de lista Python ( "['Item']" )
+            // Função robusta que tenta analisar os dados
             function extrairDados(valorBruto) {
                 if (!valorBruto || valorBruto === 'None' || valorBruto === '[]' || valorBruto.trim() === '') {
                     return [];
@@ -267,7 +266,6 @@
                     return JSON.parse(valorBruto);
                 } catch (e1) {
                     try {
-                        // Converte aspas simples em duplas para corrigir a formatação de listas Python
                         const valorCorrigido = valorBruto.replace(/'/g, '"');
                         return JSON.parse(valorCorrigido);
                     } catch (e2) {
@@ -331,22 +329,11 @@
                     }
                 });
             } else {
-                canvasLoss.parentElement.innerHTML = '<div class="text-center text-muted opacity-50 pt-5"><i class="fas fa-chart-bar fa-3x mb-2"></i><p class="fw-bold">Nenhuma perda registada!</p></div>';
+                canvasLoss.parentElement.innerHTML = '<div class="text-center text-muted opacity-50 pt-5"><i class="fas fa-chart-bar fa-3x mb-2"><\/i><p class="fw-bold">Nenhuma perda registada!<\/p><\/div>';
             }
         }
     });
 </script>
-
-<style>
-    .transition-hover { transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease; }
-    .hover-scale:hover { 
-        transform: translateY(-5px); 
-        box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
-    }
-    .hover-bg-light:hover { background-color: #f8f9fa !important; }
-</style>
-
-{% endblock %}
 
 <!-- ==========================================
      ESTILOS COMPLEMENTARES
