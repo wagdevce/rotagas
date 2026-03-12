@@ -1,7 +1,8 @@
 import datetime
 import csv
 import io
-import statistics  # NOVO: Importação para cálculo de Mediana
+import statistics
+import json
 from decimal import Decimal, InvalidOperation
 
 from django.shortcuts import render, get_object_or_404, redirect
@@ -203,7 +204,7 @@ def dash_comercial(request):
         'meta_diaria': 400
     }
 
-    # FIX UAT: Apenas Motoqueiros reais (exclui admins e agentes comerciais)
+    # FIX UAT: Apenas Motoqueiros reais (exclui admins e malta do Call Center)
     motoqueiros = User.objects.filter(
         is_active=True, 
         is_staff=False, 
@@ -287,7 +288,7 @@ def registrar_ligacao(request, cliente_id):
 
 @login_required
 def dashboard(request):
-    """Painel de Receitas e Desempenho com Filtro de Período."""
+    """Painel de Receitas e Desempenho com Inteligência de Mercado."""
     if not request.user.is_staff: 
         return redirect('home')
     
@@ -322,6 +323,23 @@ def dashboard(request):
         estoque=Count('id', filter=Q(motivo_nao_venda='NAO_PRECISA'))
     )
 
+    # ==========================================================
+    # INTELIGÊNCIA DA CONCORRÊNCIA (Gráfico de Cores)
+    # ==========================================================
+    dados_concorrencia = list(
+        visitas_periodo.filter(motivo_nao_venda='CONCORRENCIA')
+        .exclude(concorrente_empresa__isnull=True)
+        .exclude(concorrente_empresa='')
+        .values('concorrente_empresa')
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+    
+    # Preparamos os dados em JSON para o Javascript (Chart.js) ler facilmente
+    labels_concorrencia = json.dumps([item['concorrente_empresa'] for item in dados_concorrencia])
+    valores_concorrencia = json.dumps([item['total'] for item in dados_concorrencia])
+    # ==========================================================
+
     historico = visitas_periodo.select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
     qtd_ligacoes = Ligacao.objects.filter(data_ligacao__date__gte=data_inicio, data_ligacao__date__lte=data_fim).count()
     
@@ -343,6 +361,11 @@ def dashboard(request):
         'historico': historico,
         'data_inicio': data_inicio,
         'data_fim': data_fim,
+        
+        # Variáveis novas enviadas para o template (Inteligência de Mercado)
+        'labels_concorrencia': labels_concorrencia,
+        'valores_concorrencia': valores_concorrencia,
+        'tem_dados_concorrencia': len(dados_concorrencia) > 0
     }
     return render(request, 'logistica/dashboard.html', context)
 
@@ -471,7 +494,7 @@ def distribuir_rotas(request):
                 hoje = timezone.now().date()
                 nome_rota = f"Rota {hoje.strftime('%d/%m')}"
                 
-                # FIX DO CRASH UAT: Usa filter().first()
+                # FIX DO CRASH UAT (Planeamento): Usa filter().first()
                 rota = Rota.objects.filter(motoqueiro=motoqueiro, data_criacao__date=hoje, nome=nome_rota).first()
                 if not rota:
                     rota = Rota.objects.create(nome=nome_rota, motoqueiro=motoqueiro)
@@ -695,6 +718,7 @@ def detalhes_carteira(request, id_carteira):
         'clientes': carteira.clientes.all().order_by('bairro', 'nome'), 
         'motoqueiros': motoqueiros, 
         'agentes': agentes, 
+        # FIX MÚLTIPLAS CARTEIRAS: Deixa de ser isnull=True e passa a ser exclude(carteiras=carteira)
         'clientes_livres': Cliente.objects.exclude(carteiras=carteira).order_by('bairro', 'nome')
     }
     return render(request, 'logistica/detalhes_carteira.html', context)

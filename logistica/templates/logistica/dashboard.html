@@ -15,7 +15,7 @@
         <small class="text-muted">Visão Estratégica e Inteligência de Mercado</small>
     </div>
     
-    <!-- NOVO SELETOR DE PERÍODO -->
+    <!-- SELETOR DE PERÍODO -->
     <div class="d-flex align-items-center bg-white p-2 rounded shadow-sm border">
         <label class="me-2 text-muted small fw-bold mb-0 text-uppercase ps-2"><i class="far fa-calendar-alt me-1"></i> Período:</label>
         <form method="get" class="m-0 flex-grow-1 d-flex align-items-center gap-2">
@@ -99,7 +99,6 @@
             <h6 class="fw-bold text-uppercase text-muted mb-4 text-center" style="font-size: 0.8rem; letter-spacing: 0.5px;">
                 Taxa de Conversão Diária
             </h6>
-            <!-- Container Relativo para garantir responsividade do Chart.js -->
             <div style="position: relative; height: 260px; width: 100%;">
                 <canvas id="conversionChart"></canvas>
             </div>
@@ -116,7 +115,7 @@
                 <canvas id="lossChart"></canvas>
             </div>
             <div class="text-center mt-3 small text-muted">
-                <i class="fas fa-info-circle me-1"></i> Análise baseada em recusas registadas pelos motoqueiros.
+                <i class="fas fa-info-circle me-1"></i> Análise baseada nas empresas concorrentes relatadas no app.
             </div>
         </div>
     </div>
@@ -159,6 +158,7 @@
                             <span class="text-success fw-bold">Sucesso</span> • via {{ visita.rota.motoqueiro.username }}
                         {% else %}
                             <span class="text-danger fw-bold">{{ visita.get_motivo_nao_venda_display|default:"Não Vendeu" }}</span>
+                            {% if visita.concorrente_empresa %} ({{ visita.concorrente_empresa }}){% endif %}
                         {% endif %}
                     </small>
                 </div>
@@ -188,102 +188,165 @@
 <div class="pb-5"></div>
 
 <!-- ==========================================
+     DADOS INJETADOS PARA O JAVASCRIPT (SEGURO)
+     Aqui as variáveis do Django ficam isoladas do JS
+=========================================== -->
+<div id="dados-graficos" class="d-none"
+     data-labels="{{ labels_concorrencia }}"
+     data-valores="{{ valores_concorrencia }}"
+     data-vendas="{{ qtd_vendas|default:'0' }}"
+     data-perdas="{{ qtd_perdas|default:'0' }}"
+     data-pendentes="{{ pendentes|default:'0' }}">
+</div>
+
+<!-- ==========================================
      SCRIPTS: CONFIGURAÇÃO DOS GRÁFICOS
 =========================================== -->
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        
-        // Dados provindos do Backend Django (com default '0' para evitar erros de JS)
-        const valVendas = Number("{{ qtd_vendas|default:'0' }}") || 0;
-        const valPerdas = Number("{{ qtd_perdas|default:'0' }}") || 0;
-        const valPendentes = Number("{{ pendentes|default:'0' }}") || 0;
-        
-        const valConcorrencia = Number("{{ motivo_concorrencia|default:'0' }}") || 0;
-        const valEstoque = Number("{{ motivo_estoque|default:'0' }}") || 0;
+        // Elemento que guarda os dados seguros
+        const dadosEl = document.getElementById('dados-graficos');
+        if (!dadosEl) return;
 
-        // --- GRÁFICO 1: DOUGHNUT (Conversão) ---
-        const ctxConversion = document.getElementById('conversionChart').getContext('2d');
-        new Chart(ctxConversion, {
-            type: 'doughnut',
-            data: {
-                labels: ['Sucesso', 'Recusas', 'Pendentes'],
-                datasets: [{
-                    data: [valVendas, valPerdas, valPendentes],
-                    // Paleta Enterprise: Verde, Vermelho, Amarelo Mudo
-                    backgroundColor: ['#198754', '#dc3545', '#ffc107'],
-                    borderWidth: 2,
-                    borderColor: '#ffffff', // Borda branca para separação limpa
-                    hoverOffset: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '75%', // Furo interior maior (Design moderno)
-                plugins: {
-                    legend: { 
-                        position: 'bottom', 
-                        labels: { 
-                            usePointStyle: true, 
-                            padding: 20, 
-                            font: { family: 'Segoe UI', weight: '600' } 
-                        } 
-                    },
-                    tooltip: {
-                        backgroundColor: '#1A1A1A',
-                        padding: 12,
-                        cornerRadius: 8,
-                        titleFont: { size: 14 },
-                        bodyFont: { size: 14, weight: 'bold' }
-                    }
-                }
-            }
-        });
+        // ----------------------------------------------------
+        // 1. DADOS FINANCEIROS (GRÁFICO DONUT)
+        // ----------------------------------------------------
+        const valVendas = parseInt(dadosEl.getAttribute('data-vendas')) || 0;
+        const valPerdas = parseInt(dadosEl.getAttribute('data-perdas')) || 0;
+        const valPendentes = parseInt(dadosEl.getAttribute('data-pendentes')) || 0;
 
-        // --- GRÁFICO 2: BAR (Motivos de Perda) ---
-        const ctxLoss = document.getElementById('lossChart').getContext('2d');
-        new Chart(ctxLoss, {
-            type: 'bar',
-            data: {
-                labels: ['Concorrência', 'Ainda tem Gás'],
-                datasets: [{
-                    label: 'Número de Clientes',
-                    data: [valConcorrencia, valEstoque],
-                    // Paleta Brand: Laranja Rotagas (#F26522) e Preto SGB (#1A1A1A)
-                    backgroundColor: ['#F26522', '#1A1A1A'],
-                    borderRadius: 6, // Bordas arredondadas no topo
-                    barThickness: 40, // Largura controlada da barra
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { 
-                        beginAtZero: true, 
-                        ticks: { stepSize: 1, precision: 0 },
-                        grid: { borderDash: [4, 4], color: '#e9ecef' }, // Linhas tracejadas subtis
-                        border: { display: false }
-                    },
-                    x: { 
-                        grid: { display: false }, // Sem grelha vertical
-                        border: { display: false },
-                        ticks: { font: { weight: 'bold' } }
-                    }
+        const canvasConversion = document.getElementById('conversionChart');
+        if (canvasConversion && (valVendas > 0 || valPerdas > 0 || valPendentes > 0)) {
+            new Chart(canvasConversion.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Sucesso', 'Recusas', 'Pendentes'],
+                    datasets: [{
+                        data: [valVendas, valPerdas, valPendentes],
+                        backgroundColor: ['#198754', '#dc3545', '#ffc107'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 8
+                    }]
                 },
-                plugins: {
-                    legend: { display: false }, // Legenda inútil para gráfico de barras simples
-                    tooltip: {
-                        backgroundColor: '#1A1A1A',
-                        padding: 12,
-                        cornerRadius: 8,
-                        displayColors: false
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%', 
+                    plugins: {
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { usePointStyle: true, padding: 20, font: { family: 'Segoe UI', weight: '600' } } 
+                        },
+                        tooltip: {
+                            backgroundColor: '#1A1A1A',
+                            padding: 12,
+                            cornerRadius: 8,
+                            titleFont: { size: 14 },
+                            bodyFont: { size: 14, weight: 'bold' }
+                        }
+                    }
+                }
+            });
+        } else if (canvasConversion) {
+            canvasConversion.parentElement.innerHTML = '<div class="text-center text-muted opacity-50 pt-5"><i class="fas fa-chart-pie fa-3x mb-2"></i><p class="fw-bold">Sem entregas no período</p></div>';
+        }
+
+        // ----------------------------------------------------
+        // 2. INTELIGÊNCIA DE MERCADO (GRÁFICO DE BARRAS)
+        // ----------------------------------------------------
+        const canvasLoss = document.getElementById('lossChart');
+        if (canvasLoss) {
+            // Função robusta que tenta analisar os dados, independentemente de ser 
+            // JSON válido ("[]") ou representação crua de lista Python ( "['Item']" )
+            function extrairDados(valorBruto) {
+                if (!valorBruto || valorBruto === 'None' || valorBruto === '[]' || valorBruto.trim() === '') {
+                    return [];
+                }
+                try {
+                    return JSON.parse(valorBruto);
+                } catch (e1) {
+                    try {
+                        // Converte aspas simples em duplas para corrigir a formatação de listas Python
+                        const valorCorrigido = valorBruto.replace(/'/g, '"');
+                        return JSON.parse(valorCorrigido);
+                    } catch (e2) {
+                        console.warn("Os dados ignorados devido ao formato:", valorBruto);
+                        return [];
                     }
                 }
             }
-        });
+
+            const concLabels = extrairDados(dadosEl.getAttribute('data-labels'));
+            const concData = extrairDados(dadosEl.getAttribute('data-valores'));
+
+            if (Array.isArray(concLabels) && concLabels.length > 0) {
+                // Lógica de Pintura Inteligente
+                const bgColors = concLabels.map(label => {
+                    const lbl = String(label).toLowerCase();
+                    if (lbl.includes('azul') || lbl.includes('ultra')) return '#005baa';
+                    if (lbl.includes('prata') || lbl.includes('liqui')) return '#adb5bd';
+                    if (lbl.includes('dourado') || lbl.includes('nacion')) return '#ffc107';
+                    if (lbl.includes('verde') || lbl.includes('copa')) return '#198754';
+                    return '#6c757d';
+                });
+
+                new Chart(canvasLoss.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: concLabels,
+                        datasets: [{
+                            label: 'Vendas Perdidas',
+                            data: concData,
+                            backgroundColor: bgColors,
+                            borderRadius: 6,
+                            barThickness: 40,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { 
+                                beginAtZero: true, 
+                                ticks: { stepSize: 1, precision: 0 },
+                                grid: { borderDash: [4, 4], color: '#e9ecef' },
+                                border: { display: false }
+                            },
+                            x: { 
+                                grid: { display: false },
+                                border: { display: false },
+                                ticks: { font: { weight: 'bold' } }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false }, 
+                            tooltip: {
+                                backgroundColor: '#1A1A1A',
+                                padding: 12,
+                                cornerRadius: 8,
+                                displayColors: false
+                            }
+                        }
+                    }
+                });
+            } else {
+                canvasLoss.parentElement.innerHTML = '<div class="text-center text-muted opacity-50 pt-5"><i class="fas fa-chart-bar fa-3x mb-2"></i><p class="fw-bold">Nenhuma perda registada!</p></div>';
+            }
+        }
     });
 </script>
+
+<style>
+    .transition-hover { transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease; }
+    .hover-scale:hover { 
+        transform: translateY(-5px); 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
+    }
+    .hover-bg-light:hover { background-color: #f8f9fa !important; }
+</style>
+
+{% endblock %}
 
 <!-- ==========================================
      ESTILOS COMPLEMENTARES
