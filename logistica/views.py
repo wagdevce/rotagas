@@ -1,6 +1,7 @@
 import datetime
 import csv
 import io
+import statistics  # NOVO: Importação para cálculo de Mediana
 from decimal import Decimal, InvalidOperation
 
 from django.shortcuts import render, get_object_or_404, redirect
@@ -36,13 +37,16 @@ def converter_valor(valor_str):
         return Decimal('0.00')
 
 def atualizar_inteligencia_consumo(cliente):
-    """Calcula a média de dias entre compras para inteligência de IA."""
+    """Calcula a mediana de dias entre compras para inteligência de IA."""
+    
+    # Aumentamos para as últimas 10 compras para ter uma amostragem sólida para a mediana
     historico = Visita.objects.filter(
         cliente=cliente, 
         status=STATUS_REALIZADA
-    ).order_by('-data_visita')[:3]
+    ).order_by('-data_visita')[:10]
 
-    if len(historico) >= 2:
+    # Nova Regra: Só começa a mapear após a 3ª compra (mínimo de 2 intervalos)
+    if len(historico) >= 3:
         intervalos = []
         for i in range(len(historico) - 1):
             delta = (historico[i].data_visita.date() - historico[i+1].data_visita.date()).days
@@ -50,8 +54,10 @@ def atualizar_inteligencia_consumo(cliente):
                 intervalos.append(delta)
         
         if intervalos:
-            cliente.ciclo_consumo_dias = sum(intervalos) / len(intervalos)
+            # Usa a Mediana (ignora compras anormais/churrascos) e arredonda para dias inteiros
+            cliente.ciclo_consumo_dias = int(statistics.median(intervalos))
     
+    # A data da última venda atualiza sempre, independentemente da quantidade de compras
     cliente.data_ultima_venda = timezone.now().date()
     cliente.save()
 
@@ -667,7 +673,7 @@ def detalhes_carteira(request, id_carteira):
                             except Exception: 
                                 continue
                                 
-                    messages.success(request, f"Sucesso! {contagem} clientes incorporados.")
+                    messages.success(request, f"Sucesso! {contagem} clientes incorporados nesta carteira.")
                 except Exception as e: 
                     messages.error(request, f"Erro na leitura: {str(e)}")
                     
