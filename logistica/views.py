@@ -214,6 +214,7 @@ def dash_comercial(request):
 
     context = {
         'clientes_principais': clientes_principais,
+        'clientes': clientes_principais, # Resolvendo o erro de fallback no template
         'lista_retornos': lista_retornos,
         'metricas': metricas,
         'motoqueiros': motoqueiros
