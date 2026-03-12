@@ -141,6 +141,11 @@ class Ligacao(models.Model):
     observacao = models.TextField(blank=True, null=True)
     data_ligacao = models.DateTimeField(auto_now_add=True)
     data_retorno = models.DateField(blank=True, null=True)
+    
+    # --- NOVOS CAMPOS DE INTELIGÊNCIA COMERCIAL ---
+    motivo_nao_venda = models.CharField(max_length=50, blank=True, null=True)
+    concorrente_empresa = models.CharField(max_length=50, blank=True, null=True)
+    concorrente_preco = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     def __str__(self):
         return f"Ligação para {self.cliente.nome} - {self.get_resultado_display()}"

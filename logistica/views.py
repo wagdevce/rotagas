@@ -133,6 +133,7 @@ def registrar_visita(request, id_visita):
             valor = converter_valor(request.POST.get('valor_recebido'))
             visita.status = STATUS_REALIZADA
             visita.valor_recebido = valor
+            # O valor NÃO é mais deduzido da divida_atual do cliente aqui para evitar saldos negativos
             visita.cliente.save()
             
             # Recalcula a previsão de consumo após a venda
@@ -193,7 +194,7 @@ def dash_comercial(request):
         id__in=clientes_ja_ligados_ids
     ).exclude(
         id__in=ids_clientes_retorno
-    ).distinct().order_by('nome')
+    ).distinct().order_by('nome') # Ordenação limpa alfabética
 
     # 4. Métricas do Dia (KPIs)
     ligacoes_hoje = Ligacao.objects.filter(agente=request.user, data_ligacao__date=hoje)
@@ -204,7 +205,7 @@ def dash_comercial(request):
         'meta_diaria': 400
     }
 
-    # FIX UAT: Apenas Motoqueiros reais (exclui admins e malta do Call Center)
+    # Popula o Dropdown do Despacho (Modal de Venda)
     motoqueiros = User.objects.filter(
         is_active=True, 
         is_staff=False, 
@@ -237,17 +238,31 @@ def registrar_ligacao(request, cliente_id):
             except ValueError:
                 pass
 
+        # --- NOVA LÓGICA DE INTELIGÊNCIA COMERCIAL ---
+        motivo = None
+        conc_empresa = None
+        conc_preco = Decimal('0.00')
+        
+        if resultado == 'RECUSA':
+            motivo = request.POST.get('motivo_nao_venda')
+            if motivo == 'CONCORRENCIA':
+                conc_empresa = request.POST.get('concorrente_empresa')
+                conc_preco = converter_valor(request.POST.get('concorrente_preco'))
+
         # Regista a ligação no banco de dados para a auditoria do Gerente
         Ligacao.objects.create(
             agente=request.user, 
             cliente=cliente, 
             resultado=resultado, 
             observacao=obs, 
-            data_retorno=data_retorno
+            data_retorno=data_retorno,
+            motivo_nao_venda=motivo,
+            concorrente_empresa=conc_empresa,
+            concorrente_preco=conc_preco
         )
 
+        # Se foi venda, gera a entrega na hora
         if resultado == 'VENDA_FECHADA':
-            # FIX UAT: Despacho Direcional com Valores e Forma de Pagamento
             motoqueiro_id = request.POST.get('motoqueiro_id')
             
             if motoqueiro_id:
@@ -259,7 +274,7 @@ def registrar_ligacao(request, cliente_id):
                 hoje = timezone.now().date()
                 nome_rota = f"Rota Comercial {hoje.strftime('%d/%m')}"
                 
-                # FIX DO CRASH (UAT): Usa filter().first() para evitar MultipleObjectsReturned
+                # Usa filter().first() para evitar MultipleObjectsReturned
                 rota = Rota.objects.filter(motoqueiro=motoqueiro, data_criacao__date=hoje, nome=nome_rota).first()
                 if not rota:
                     rota = Rota.objects.create(motoqueiro=motoqueiro, nome=nome_rota)
@@ -288,7 +303,7 @@ def registrar_ligacao(request, cliente_id):
 
 @login_required
 def dashboard(request):
-    """Painel de Receitas e Desempenho com Inteligência de Mercado."""
+    """Painel de Receitas e Desempenho com Inteligência de Mercado Combinada."""
     if not request.user.is_staff: 
         return redirect('home')
     
@@ -313,7 +328,11 @@ def dashboard(request):
         rota__data_criacao__date__lte=data_fim
     )
     
-    # FIX GRÁFICOS UAT: total_perdas conta TODAS as baixas negativas
+    ligacoes_periodo = Ligacao.objects.filter(
+        data_ligacao__date__gte=data_inicio, 
+        data_ligacao__date__lte=data_fim
+    )
+    
     resumo = visitas_periodo.aggregate(
         total_recebido=Sum('valor_recebido'),
         pendentes=Count('id', filter=Q(status=STATUS_PENDENTE)),
@@ -323,25 +342,46 @@ def dashboard(request):
         estoque=Count('id', filter=Q(motivo_nao_venda='NAO_PRECISA'))
     )
 
+    perdas_comercial = ligacoes_periodo.filter(resultado='RECUSA').count()
+
     # ==========================================================
-    # INTELIGÊNCIA DA CONCORRÊNCIA (Gráfico de Cores)
+    # INTELIGÊNCIA DA CONCORRÊNCIA (Motoqueiros + Call Center)
     # ==========================================================
-    dados_concorrencia = list(
+    dados_concorrencia_visitas = list(
         visitas_periodo.filter(motivo_nao_venda='CONCORRENCIA')
         .exclude(concorrente_empresa__isnull=True)
         .exclude(concorrente_empresa='')
         .values('concorrente_empresa')
         .annotate(total=Count('id'))
-        .order_by('-total')
     )
     
-    # Preparamos os dados em JSON para o Javascript (Chart.js) ler facilmente
-    labels_concorrencia = json.dumps([item['concorrente_empresa'] for item in dados_concorrencia])
-    valores_concorrencia = json.dumps([item['total'] for item in dados_concorrencia])
+    dados_concorrencia_ligacoes = list(
+        ligacoes_periodo.filter(motivo_nao_venda='CONCORRENCIA')
+        .exclude(concorrente_empresa__isnull=True)
+        .exclude(concorrente_empresa='')
+        .values('concorrente_empresa')
+        .annotate(total=Count('id'))
+    )
+    
+    # Agrupa os dados das duas tabelas (Rua + Telefone) num único Dicionário
+    concorrencia_dict = {}
+    for item in dados_concorrencia_visitas:
+        concorrencia_dict[item['concorrente_empresa']] = item['total']
+        
+    for item in dados_concorrencia_ligacoes:
+        emp = item['concorrente_empresa']
+        concorrencia_dict[emp] = concorrencia_dict.get(emp, 0) + item['total']
+        
+    # Transforma o dicionário novamente em lista e ordena para o Gráfico
+    dados_unificados = [{'concorrente_empresa': k, 'total': v} for k, v in concorrencia_dict.items()]
+    dados_unificados.sort(key=lambda x: x['total'], reverse=True)
+    
+    labels_concorrencia = json.dumps([item['concorrente_empresa'] for item in dados_unificados])
+    valores_concorrencia = json.dumps([item['total'] for item in dados_unificados])
     # ==========================================================
 
     historico = visitas_periodo.select_related('cliente', 'rota__motoqueiro').order_by('-data_visita')
-    qtd_ligacoes = Ligacao.objects.filter(data_ligacao__date__gte=data_inicio, data_ligacao__date__lte=data_fim).count()
+    qtd_ligacoes = ligacoes_periodo.count()
     
     limite_inativo = hoje - datetime.timedelta(days=15)
     qtd_inativos = Cliente.objects.filter(
@@ -353,7 +393,7 @@ def dashboard(request):
         'pendentes': resumo['pendentes'],
         'realizadas': (resumo['vendas'] or 0) + (resumo['total_perdas'] or 0),
         'qtd_vendas': resumo['vendas'],
-        'qtd_perdas': resumo['total_perdas'],
+        'qtd_perdas': (resumo['total_perdas'] or 0) + perdas_comercial,
         'motivo_concorrencia': resumo['concorrencia'],
         'motivo_estoque': resumo['estoque'],
         'qtd_ligacoes': qtd_ligacoes,
@@ -365,7 +405,7 @@ def dashboard(request):
         # Variáveis novas enviadas para o template (Inteligência de Mercado)
         'labels_concorrencia': labels_concorrencia,
         'valores_concorrencia': valores_concorrencia,
-        'tem_dados_concorrencia': len(dados_concorrencia) > 0
+        'tem_dados_concorrencia': len(dados_unificados) > 0
     }
     return render(request, 'logistica/dashboard.html', context)
 
@@ -494,7 +534,6 @@ def distribuir_rotas(request):
                 hoje = timezone.now().date()
                 nome_rota = f"Rota {hoje.strftime('%d/%m')}"
                 
-                # FIX DO CRASH UAT (Planeamento): Usa filter().first()
                 rota = Rota.objects.filter(motoqueiro=motoqueiro, data_criacao__date=hoje, nome=nome_rota).first()
                 if not rota:
                     rota = Rota.objects.create(nome=nome_rota, motoqueiro=motoqueiro)
@@ -521,7 +560,6 @@ def distribuir_rotas(request):
     elif status_filter == 'SEM_HISTORICO': 
         clientes = [c for c in clientes if c.data_ultima_venda is None]
 
-    # FIX UAT: Apenas Motoqueiros reais
     motoqueiros = User.objects.filter(
         is_active=True, 
         is_staff=False, 
@@ -606,7 +644,7 @@ def detalhes_carteira(request, id_carteira):
                 carteira.save()
                 messages.success(request, "Carteira atualizada com sucesso.")
                 
-        # Gestão de Atribuições
+        # Gestão de Atribuições (Protegido para PostgreSQL)
         elif acao == 'definir_motoqueiro':
             motoqueiro_id = request.POST.get('motoqueiro_id')
             if motoqueiro_id:
@@ -702,7 +740,6 @@ def detalhes_carteira(request, id_carteira):
                     
         return redirect('detalhes_carteira', id_carteira=id_carteira)
 
-    # FIX UAT: Filtros de utilizadores blindados
     motoqueiros = User.objects.filter(
         is_active=True, 
         is_staff=False, 
@@ -718,7 +755,6 @@ def detalhes_carteira(request, id_carteira):
         'clientes': carteira.clientes.all().order_by('bairro', 'nome'), 
         'motoqueiros': motoqueiros, 
         'agentes': agentes, 
-        # FIX MÚLTIPLAS CARTEIRAS: Deixa de ser isnull=True e passa a ser exclude(carteiras=carteira)
         'clientes_livres': Cliente.objects.exclude(carteiras=carteira).order_by('bairro', 'nome')
     }
     return render(request, 'logistica/detalhes_carteira.html', context)

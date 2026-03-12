@@ -3,7 +3,7 @@
 {% block content %}
 <!-- ESTILOS DAS ABAS E TABELAS -->
 <style>
-    .nav-pills .nav-link { color: var(--sgb-black); background-color: white; transition: all 0.3s ease; }
+    .nav-pills .nav-link { color: var(--sgb-black); background-color: white; transition: all 0.3s ease; border: 1px solid #dee2e6; }
     .nav-pills .nav-link:hover:not(.active) { background-color: #f8f9fa; transform: translateY(-2px); }
     .nav-pills .nav-link.active { background-color: var(--sgb-orange) !important; color: white !important; border-color: var(--sgb-orange) !important; box-shadow: 0 4px 10px rgba(242, 101, 34, 0.3) !important; }
     .table-hover tbody tr:hover { background-color: rgba(242, 101, 34, 0.03); transition: background-color 0.2s ease; }
@@ -59,13 +59,13 @@
 <!-- NAVEGAÇÃO POR ABAS -->
 <ul class="nav nav-pills mb-4 gap-2" id="pills-tab" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active fw-bold text-uppercase small px-4 rounded-pill border shadow-sm" id="pills-mailing-tab" data-bs-toggle="pill" data-bs-target="#pills-mailing" type="button" role="tab">
+        <button class="nav-link active fw-bold text-uppercase small px-4 rounded-pill shadow-sm" id="pills-mailing-tab" data-bs-toggle="pill" data-bs-target="#pills-mailing" type="button" role="tab">
             <i class="fas fa-list me-1"></i> Mailing Principal
-            <span class="badge bg-light text-dark ms-2 rounded-pill">{{ clientes_principais.count }}</span>
+            <span class="badge bg-light text-dark ms-2 rounded-pill">{{ clientes_principais.count|default:clientes.count }}</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link fw-bold text-uppercase small px-4 rounded-pill border shadow-sm position-relative" id="pills-retornos-tab" data-bs-toggle="pill" data-bs-target="#pills-retornos" type="button" role="tab">
+        <button class="nav-link fw-bold text-uppercase small px-4 rounded-pill shadow-sm position-relative" id="pills-retornos-tab" data-bs-toggle="pill" data-bs-target="#pills-retornos" type="button" role="tab">
             <i class="fas fa-history me-1"></i> Agendados Hoje
             {% if lista_retornos|length > 0 %}
             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light shadow-sm">
@@ -93,7 +93,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for cliente in clientes_principais %}
+                        {% for cliente in clientes_principais|default:clientes %}
                         <tr>
                             <td class="ps-4">
                                 <div class="fw-bold text-dark fs-6">{{ cliente.nome }}</div>
@@ -131,7 +131,7 @@
                                         <i class="fas fa-times"></i> Ação
                                     </button>
                                     
-                                    <!-- Botão Sem Atender (Com Confirmação UAT) -->
+                                    <!-- Botão Sem Atender -->
                                     <form method="POST" action="{% url 'registrar_ligacao' cliente.id %}" class="m-0 formSemAtender" onsubmit="return confirm('Marcar como Caixa Postal / Sem Atender? O cliente sairá da lista de hoje.');">
                                         {% csrf_token %}
                                         <input type="hidden" name="resultado" value="CAIXA_POSTAL">
@@ -185,7 +185,6 @@
                                     <a href="tel:{{ lig.cliente.telefone }}" class="fw-bold text-dark text-decoration-none">
                                         <i class="fas fa-phone-alt me-1 text-muted"></i> {{ lig.cliente.telefone }}
                                     </a>
-                                    <!-- Botão ZAP nos retornos (UAT Fix) -->
                                     <a href="https://wa.me/55{{ lig.cliente.telefone }}?text=Olá%20{{ lig.cliente.nome|urlencode }},%20tínhamos%20combinado%20de%20falar%20hoje..." 
                                        target="_blank" class="btn btn-sm btn-success py-1 px-3 fw-bold shadow-sm" style="font-size: 0.75rem; border-radius: 6px;">
                                         <i class="fab fa-whatsapp me-1"></i> ZAP
@@ -202,7 +201,6 @@
                                         <i class="fas fa-times"></i> Ação
                                     </button>
                                     
-                                    <!-- Botão Sem Atender nos Retornos -->
                                     <form method="POST" action="{% url 'registrar_ligacao' lig.cliente.id %}" class="m-0 formSemAtender" onsubmit="return confirm('Marcar como Caixa Postal / Sem Atender? O cliente sairá da lista de hoje.');">
                                         {% csrf_token %}
                                         <input type="hidden" name="resultado" value="CAIXA_POSTAL">
@@ -292,7 +290,6 @@
                 
                 <div class="modal-footer bg-light border-0">
                     <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <!-- Identificador ID adicionado para o JavaScript -->
                     <button type="submit" id="btnDespachar" class="btn btn-success fw-bold px-4 shadow-sm">
                         <i class="fas fa-paper-plane me-2"></i> Despachar
                     </button>
@@ -327,6 +324,37 @@
                         <label class="btn btn-outline-primary w-50 fw-bold py-2" for="opt_reagendar">Ligar Depois</label>
                     </div>
 
+                    <!-- NOVO BLOCO: MOTIVO DA RECUSA (INTELIGÊNCIA DE MERCADO) -->
+                    <div id="bloco_motivo_recusa" class="mb-3">
+                        <label class="form-label small fw-bold text-danger text-uppercase">Qual o motivo da recusa?</label>
+                        <select name="motivo_nao_venda" id="motivo_select_comercial" class="form-select bg-light border-0 mb-3 shadow-sm" onchange="toggleConcorrenciaComercial()">
+                            <option value="OUTROS" selected>Outros / Apenas Recusou</option>
+                            <option value="NAO_PRECISA">Ainda tem gás (Não Precisa)</option>
+                            <option value="CONCORRENCIA">Comprou da Concorrência</option>
+                        </select>
+
+                        <!-- SUB-CAMPO: CONCORRÊNCIA -->
+                        <div id="bloco_concorrencia_comercial" class="d-none p-3 bg-white border border-danger border-opacity-25 rounded-3 mb-3 shadow-sm">
+                            <h6 class="fw-bold text-danger small text-uppercase mb-3">Inteligência de Mercado</h6>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted">Cor do Botijão (Marca)</label>
+                                <select name="concorrente_empresa" class="form-select bg-light border-0">
+                                    <option value="" disabled selected>Escolha a marca...</option>
+                                    <option value="Azul (Ultragaz)">Azul (Ultragaz)</option>
+                                    <option value="Prata (Liquigás)">Prata (Liquigás)</option>
+                                    <option value="Dourado (Nacional)">Dourado (Nacional)</option>
+                                    <option value="Verde (Copagaz)">Verde (Copagaz)</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label small text-muted">Preço Pago pelo Cliente (R$)</label>
+                                <input type="number" step="0.01" name="concorrente_preco" class="form-control bg-light border-0" placeholder="Ex: 95.00" inputmode="decimal">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BLOCO DE AGENDAMENTO (Só aparece se Ligar Depois for marcado) -->
                     <div id="bloco_agendamento" class="d-none mb-3 p-3 bg-light rounded border border-primary border-opacity-25 shadow-sm">
                         <label class="form-label small fw-bold text-primary text-uppercase"><i class="far fa-calendar-alt me-1"></i> Agendar Retorno para:</label>
                         <input type="date" name="data_agendamento" id="data_agendamento_input" class="form-control fw-bold text-dark">
@@ -340,7 +368,6 @@
                 
                 <div class="modal-footer bg-light border-0">
                     <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <!-- Identificador ID adicionado para o JavaScript -->
                     <button type="submit" id="btnSalvarRegisto" class="btn btn-dark fw-bold px-4 shadow-sm" style="background-color: var(--sgb-black);">
                         <i class="fas fa-save me-2"></i> Salvar Registo
                     </button>
@@ -362,9 +389,11 @@
             document.getElementById('formRecusaComercial').action = button.getAttribute('data-action');
             document.getElementById('nomeClienteModal').textContent = button.getAttribute('data-nome');
             
-            // Reseta para o padrão sempre que o modal abre
+            // Reseta para o padrão (Não Quis Agora) sempre que o modal abre
             document.getElementById('opt_recusa').checked = true;
+            document.getElementById('motivo_select_comercial').value = 'OUTROS';
             toggleAgendamento();
+            toggleConcorrenciaComercial();
         });
     }
 
@@ -378,31 +407,44 @@
         });
     }
 
-    // 3. Alternar exibição de Agendamento
+    // 3. Alternar exibição de Agendamento x Motivo da Recusa
     function toggleAgendamento() {
         const isReagendar = document.getElementById('opt_reagendar').checked;
         const blocoData = document.getElementById('bloco_agendamento');
         const inputData = document.getElementById('data_agendamento_input');
+        const blocoMotivo = document.getElementById('bloco_motivo_recusa');
+        
         if (isReagendar) {
             blocoData.classList.remove('d-none');
             inputData.required = true;
+            if(blocoMotivo) blocoMotivo.classList.add('d-none'); // Oculta o motivo se for apenas reagendar
         } else {
             blocoData.classList.add('d-none');
             inputData.required = false;
             inputData.value = '';
+            if(blocoMotivo) blocoMotivo.classList.remove('d-none'); // Exibe o motivo se for recusa definitiva
         }
     }
 
-    // 4. PREVENÇÃO DE DUPLO CLIQUE E FEEDBACK VISUAL (Blindagem de Formulários)
+    // 4. Mostrar campo de concorrência se a recusa for para outra marca
+    function toggleConcorrenciaComercial() {
+        const motivo = document.getElementById('motivo_select_comercial').value;
+        const blocoConc = document.getElementById('bloco_concorrencia_comercial');
+        if (motivo === 'CONCORRENCIA') {
+            blocoConc.classList.remove('d-none');
+        } else {
+            blocoConc.classList.add('d-none');
+        }
+    }
+
+    // 5. PREVENÇÃO DE DUPLO CLIQUE E FEEDBACK VISUAL
     document.addEventListener("DOMContentLoaded", function() {
         
-        // Blindagem do Formulário de Venda
+        // Formulário de Venda
         const formVenda = document.getElementById('formVendaComercial');
         const btnDespachar = document.getElementById('btnDespachar');
-        
         if (formVenda && btnDespachar) {
             formVenda.addEventListener('submit', function() {
-                // Apenas bloqueia se o formulário for válido (passar nos 'required')
                 if(formVenda.checkValidity()) {
                     btnDespachar.classList.add('disabled');
                     btnDespachar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> A processar...';
@@ -411,10 +453,9 @@
             });
         }
 
-        // Blindagem do Formulário de Recusa
+        // Formulário de Recusa
         const formRecusa = document.getElementById('formRecusaComercial');
         const btnSalvarRegisto = document.getElementById('btnSalvarRegisto');
-        
         if (formRecusa && btnSalvarRegisto) {
             formRecusa.addEventListener('submit', function() {
                 if(formRecusa.checkValidity()) {
@@ -425,7 +466,7 @@
             });
         }
 
-        // Blindagem dos botões rápidos de "Sem Atender"
+        // Botões rápidos "Sem Atender"
         const formsRapidos = document.querySelectorAll('.formSemAtender');
         formsRapidos.forEach(form => {
             form.addEventListener('submit', function() {
