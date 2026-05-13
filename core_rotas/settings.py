@@ -15,10 +15,10 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-chave-secreta-
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 # ALLOWED_HOSTS: Aceita o seu PC, rede local e o domínio da Railway
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*', '.vercel.app']
 
 # CSRF: Essencial para formulários de Login funcionarem na Railway sem dar Erro 403
-CSRF_TRUSTED_ORIGINS = ['https://*.railway.app']
+CSRF_TRUSTED_ORIGINS = ['https://*.railway.app', 'https://*.vercel.app']
 
 # ==============================================================================
 # APLICAÇÕES INSTALADAS
