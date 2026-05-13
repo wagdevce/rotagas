@@ -69,21 +69,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core_rotas.wsgi.application'
 
 # ==============================================================================
-# BASE DE DADOS (LÓGICA HÍBRIDA)
+# BASE DE DADOS (SUPORTE VERCEL POSTGRES)
 # ==============================================================================
-DATABASE_URL = os.environ.get('DATABASE_URL')
+# A Vercel (conforme o teu prefixo na imagem) vai usar STORAGE_URL ou POSTGRES_URL
+DATABASE_URL = os.environ.get('STORAGE_URL') or os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    # Se encontrou a URL (Railway), liga-se ao PostgreSQL profissional
     DATABASES = {
         'default': dj_database_url.config(
             default=DATABASE_URL,
             conn_max_age=600,
-            conn_health_checks=True,
+            ssl_require=True # OBRIGATÓRIO PARA VERCEL NEON
         )
     }
 else:
-    # Se não encontrou (Seu PC), usa o ficheiro SQLite local
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
