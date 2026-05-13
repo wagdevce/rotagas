@@ -1,19 +1,23 @@
 {
-  "version": 2,
-  "functions": {
-    "core_rotas/wsgi.py": {
-      "maxDuration": 15,
-      "runtime": "vercel-python@4.6.0"
-    }
-  },
-  "routes": [
-    {
-      "src": "/static/(.*)",
-      "dest": "/static/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "core_rotas/wsgi.py"
-    }
-  ]
+    "version": 2,
+    "builds": [
+        {
+            "src": "core_rotas/wsgi.py",
+            "use": "@vercel/python",
+            "config": {
+                "maxLambdaSize": "15mb",
+                "runtime": "python3.12"
+            }
+        }
+    ],
+    "routes": [
+        {
+            "src": "/static/(.*)",
+            "dest": "/static/$1"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "core_rotas/wsgi.py"
+        }
+    ]
 }
