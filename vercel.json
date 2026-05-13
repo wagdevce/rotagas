@@ -1,18 +1,11 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "core_rotas/wsgi.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "build_files.sh",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "staticfiles"
-      }
+  "functions": {
+    "core_rotas/wsgi.py": {
+      "maxDuration": 15,
+      "runtime": "vercel-python@4.6.0"
     }
-  ],
+  },
   "routes": [
     {
       "src": "/static/(.*)",
